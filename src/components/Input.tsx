@@ -5,41 +5,20 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     icon: LucideIcon;
 }
 
-const Input: React.FC<InputProps> = ({ icon: Icon, ...props }) => {
+const Input: React.FC<InputProps> = ({ icon: Icon, className, ...props }) => {
     return (
-        <div style={{ position: 'relative', width: '100%' }}>
+        <div className="relative w-full">
             <input
                 {...props}
-                style={{
-                    width: '100%',
-                    backgroundColor: 'var(--input-bg)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    padding: '1rem 1rem 1rem 3.2rem',
-                    color: 'var(--text-white)',
-                    fontSize: '1rem',
-                    outline: 'none',
-                    transition: 'all 0.3s ease',
-                }}
-                onFocus={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--primary)';
-                    e.currentTarget.style.boxShadow = '0 0 0 2px rgba(59, 130, 246, 0.2)';
-                }}
-                onBlur={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border-color)';
-                    e.currentTarget.style.boxShadow = 'none';
-                }}
+                className={`
+                    w-full bg-input-bg border border-border-color rounded-lg py-4 pl-13 pr-4 text-text-white text-base outline-hidden transition-all duration-300
+                    focus:border-primary focus:ring-2 focus:ring-blue-500/20
+                    ${className || ''}
+                `}
             />
             <Icon
                 size={20}
-                style={{
-                    position: 'absolute',
-                    left: '1.2rem',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: 'var(--text-muted)',
-                    pointerEvents: 'none'
-                }}
+                className="absolute left-[1.2rem] top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
             />
         </div>
     );

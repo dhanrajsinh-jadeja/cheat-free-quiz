@@ -16,71 +16,37 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   ];
 
   return (
-    <div style={{ display: 'flex', height: '100vh', backgroundColor: 'var(--bg-light)' }}>
+    <div className="flex h-screen bg-bg-light">
       {/* Sidebar */}
-      <aside style={{
-        width: '280px',
-        backgroundColor: 'var(--bg-dark)',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '2rem 1.5rem',
-        color: 'var(--text-white)'
-      }}>
-        <div style={{ marginBottom: '3rem', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            background: 'linear-gradient(135deg, #60a5fa, #3b82f6)',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
+      <aside className="w-[280px] bg-bg-dark flex flex-col p-8 text-text-white">
+        <div className="mb-12 flex items-center gap-3">
+          <div className="w-10 h-10 bg-linear-to-br from-[#60a5fa] to-[#3b82f6] rounded-[10px] flex items-center justify-center">
             <BookOpen size={24} />
           </div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: '800', letterSpacing: '-0.02em' }}>QuizMaster</h2>
+          <h2 className="text-xl font-extrabold tracking-tight">QuizMaster</h2>
         </div>
 
-        <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <nav className="flex-1 flex flex-col gap-2">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '1rem',
-                  padding: '1rem',
-                  borderRadius: '12px',
-                  textDecoration: 'none',
-                  color: isActive ? 'white' : 'var(--text-muted)',
-                  backgroundColor: isActive ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
-                  transition: 'all 0.3s ease',
-                  border: isActive ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid transparent'
-                }}
+                className={`
+                  flex items-center gap-4 p-4 rounded-xl no-underline transition-all duration-300
+                  ${isActive ? 'text-white bg-blue-500/15 border border-blue-500/30' : 'text-text-muted border border-transparent'}
+                `}
               >
-                <item.icon size={20} color={isActive ? 'var(--primary)' : 'inherit'} />
-                <span style={{ fontWeight: isActive ? '600' : '400' }}>{item.label}</span>
+                <item.icon size={20} className={isActive ? 'text-primary' : 'inherit'} />
+                <span className={isActive ? 'font-semibold' : 'font-normal'}>{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
-          <button style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-            width: '100%',
-            padding: '1rem',
-            backgroundColor: 'transparent',
-            border: 'none',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            fontSize: '1rem'
-          }}>
+        <div className="border-t border-border-color pt-6">
+          <button className="flex items-center gap-4 w-full p-4 bg-transparent border-none text-text-muted cursor-pointer text-base">
             <LogOut size={20} />
             <span>Logout</span>
           </button>
@@ -88,50 +54,34 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       </aside>
 
       {/* Main Content Area */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <main className="flex-1 flex flex-col overflow-hidden">
         {/* Top Header */}
-        <header style={{
-          height: '70px',
-          backgroundColor: 'white',
-          borderBottom: '1px solid #e2e8f0',
-          padding: '0 2rem',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}>
-          <div style={{ position: 'relative', maxWidth: '400px', width: '100%' }}>
-            <Search size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+        <header className="h-[70px] bg-white border-b border-[#e2e8f0] px-8 flex items-center justify-between">
+          <div className="relative max-w-[400px] w-full">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
             <input
               type="text"
               placeholder="Search quizzes, students..."
-              style={{
-                width: '100%',
-                padding: '0.7rem 1rem 0.7rem 3rem',
-                borderRadius: '10px',
-                border: '1px solid #e2e8f0',
-                backgroundColor: '#f8fafc',
-                outline: 'none',
-                fontSize: '0.9rem'
-              }}
+              className="w-full pl-12 pr-4 py-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] outline-hidden text-[0.9rem]"
             />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-            <button style={{ position: 'relative', border: 'none', background: 'none', cursor: 'pointer', color: '#64748b' }}>
+          <div className="flex items-center gap-6">
+            <button className="relative border-none bg-none cursor-pointer text-[#64748b]">
               <Bell size={22} />
-              <span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', backgroundColor: '#ef4444', borderRadius: '50%', border: '2px solid white' }}></span>
+              <span className="absolute top-[2px] right-[2px] w-2 h-2 bg-[#ef4444] rounded-full border-2 border-white"></span>
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-dark)' }}>Admin User</p>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>admin@quizmaster.com</p>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-[0.9rem] font-semibold text-text-dark">Admin User</p>
+                <p className="text-[0.75rem] text-[#94a3b8]">admin@quizmaster.com</p>
               </div>
-              <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e2e8f0' }}></div>
+              <div className="w-10 h-10 rounded-full bg-[#e2e8f0]"></div>
             </div>
           </div>
         </header>
 
         {/* Content */}
-        <section style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
+        <section className="flex-1 p-8 overflow-y-auto">
           {children}
         </section>
       </main>

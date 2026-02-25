@@ -54,62 +54,52 @@ const CreateQuizPage: React.FC = () => {
 
     return (
         <DashboardLayout>
-            <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-                <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+            <div className="max-w-[900px] mx-auto">
+                <header className="mb-8 flex justify-between items-end">
                     <div>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-dark)', marginBottom: '0.5rem' }}>Create New Quiz</h1>
-                        <p style={{ color: '#64748b' }}>Design your quiz by adding questions and setting preferences.</p>
+                        <h1 className="text-[2rem] font-extrabold text-text-dark mb-2">Create New Quiz</h1>
+                        <p className="text-[#64748b]">Design your quiz by adding questions and setting preferences.</p>
                     </div>
-                    <Button style={{ width: 'auto', padding: '0.8rem 2rem' }}>Publish Quiz</Button>
+                    <Button className="w-auto px-8 py-3">Publish Quiz</Button>
                 </header>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '2rem' }}>
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_300px] gap-8">
                     {/* Main Editor */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                    <div className="flex flex-col gap-8">
                         {/* Quiz Info Card */}
-                        <div style={{
-                            backgroundColor: 'white',
-                            padding: '2rem',
-                            borderRadius: '20px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                            border: '1px solid #e2e8f0'
-                        }}>
-                            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                                <Layout size={20} color="var(--primary)" /> Quiz Basics
+                        <div className="bg-white p-8 rounded-[20px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)] border border-[#e2e8f0]">
+                            <h3 className="text-[1.2rem] font-bold mb-6 flex items-center gap-3">
+                                <Layout size={20} className="text-primary" /> Quiz Basics
                             </h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#475569' }}>Quiz Title</label>
+                            <div className="flex flex-col gap-6">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[0.9rem] font-semibold text-[#475569]">Quiz Title</label>
                                     <input
                                         type="text"
                                         placeholder="e.g. Modern Web Development"
                                         value={quizInfo.title}
                                         onChange={(e) => setQuizInfo({ ...quizInfo, title: e.target.value })}
-                                        style={{ padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', outline: 'none', transition: 'border-color 0.3s' }}
+                                        className="p-3 px-4 rounded-xl border border-[#e2e8f0] outline-hidden transition-colors focus:border-primary"
                                     />
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#475569' }}>Description</label>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[0.9rem] font-semibold text-[#475569]">Description</label>
                                     <textarea
                                         placeholder="What is this quiz about?"
                                         value={quizInfo.description}
                                         onChange={(e) => setQuizInfo({ ...quizInfo, description: e.target.value })}
-                                        style={{ padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', outline: 'none', minHeight: '100px', resize: 'vertical' }}
+                                        className="p-3 px-4 rounded-xl border border-[#e2e8f0] outline-hidden min-h-[100px] resize-y transition-colors focus:border-primary"
                                     />
                                 </div>
                             </div>
                         </div>
 
                         {/* Questions Header */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ fontSize: '1.4rem', fontWeight: '700', color: 'var(--text-dark)' }}>Questions ({questions.length})</h3>
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-[1.4rem] font-bold text-text-dark">Questions ({questions.length})</h3>
                             <button
                                 onClick={addQuestion}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem',
-                                    backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '10px',
-                                    fontWeight: '600', color: 'var(--primary)', cursor: 'pointer', transition: 'all 0.3s'
-                                }}
+                                className="flex items-center gap-2 px-5 py-2.5 bg-white border border-[#e2e8f0] rounded-xl font-semibold text-primary cursor-pointer transition-all hover:bg-white/5 active:scale-95"
                             >
                                 <Plus size={18} /> Add Question
                             </button>
@@ -117,25 +107,18 @@ const CreateQuizPage: React.FC = () => {
 
                         {/* Question Cards */}
                         {questions.map((q, idx) => (
-                            <div key={q.id} style={{
-                                backgroundColor: 'white',
-                                padding: '2rem',
-                                borderRadius: '20px',
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                                border: '1px solid #e2e8f0',
-                                position: 'relative'
-                            }}>
-                                <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', display: 'flex', gap: '0.5rem' }}>
+                            <div key={q.id} className="bg-white p-8 rounded-[20px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)] border border-[#e2e8f0] relative">
+                                <div className="absolute top-6 right-6 flex gap-2">
                                     <button
                                         onClick={() => removeQuestion(q.id)}
-                                        style={{ border: 'none', background: '#fee2e2', color: '#ef4444', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer' }}
+                                        className="border-none bg-[#fee2e2] text-[#ef4444] p-2 rounded-lg cursor-pointer hover:bg-[#fecaca] transition-colors"
                                     >
                                         <Trash2 size={16} />
                                     </button>
                                 </div>
 
-                                <div style={{ marginBottom: '1.5rem' }}>
-                                    <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '0.5rem', display: 'block' }}>
+                                <div className="mb-6">
+                                    <span className="text-[0.85rem] font-extrabold text-primary uppercase mb-2 block">
                                         Question {idx + 1}
                                     </span>
                                     <input
@@ -143,26 +126,26 @@ const CreateQuizPage: React.FC = () => {
                                         placeholder="Enter your question here..."
                                         value={q.text}
                                         onChange={(e) => updateQuestion(q.id, 'text', e.target.value)}
-                                        style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', fontWeight: '500', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none' }}
+                                        className="w-full p-4 text-[1.1rem] font-medium rounded-xl border border-[#e2e8f0] outline-hidden focus:border-primary transition-colors"
                                     />
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {q.options.map((opt, optIdx) => (
-                                        <div key={optIdx} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', backgroundColor: '#f8fafc', padding: '0.8rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                        <div key={optIdx} className="flex items-center gap-3 bg-[#f8fafc] p-3 rounded-xl border border-[#e2e8f0]">
                                             <input
                                                 type="radio"
                                                 name={`correct-${q.id}`}
                                                 checked={q.correctAnswer === optIdx}
                                                 onChange={() => updateQuestion(q.id, 'correctAnswer', optIdx)}
-                                                style={{ width: '20px', height: '20px', accentColor: '#22c55e' }}
+                                                className="w-5 h-5 accent-[#22c55e]"
                                             />
                                             <input
                                                 type="text"
                                                 placeholder={`Option ${optIdx + 1}`}
                                                 value={opt}
                                                 onChange={(e) => updateOption(q.id, optIdx, e.target.value)}
-                                                style={{ border: 'none', background: 'transparent', width: '100%', outline: 'none', fontSize: '0.95rem' }}
+                                                className="border-none bg-transparent w-full outline-hidden text-[0.95rem]"
                                             />
                                         </div>
                                     ))}
@@ -172,23 +155,17 @@ const CreateQuizPage: React.FC = () => {
                     </div>
 
                     {/* Sidebar Settings */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                        <div style={{
-                            backgroundColor: 'white',
-                            padding: '1.5rem',
-                            borderRadius: '20px',
-                            border: '1px solid #e2e8f0',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
-                        }}>
-                            <h4 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '1.2rem', color: 'var(--text-dark)' }}>Settings</h4>
+                    <div className="flex flex-col gap-6">
+                        <div className="bg-white p-6 rounded-[20px] border border-[#e2e8f0] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)]">
+                            <h4 className="text-base font-bold mb-5 text-text-dark">Settings</h4>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                    <label style={{ fontSize: '0.85rem', fontWeight: '600', color: '#64748b' }}>Category</label>
+                            <div className="flex flex-col gap-5">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[0.85rem] font-semibold text-[#64748b]">Category</label>
                                     <select
                                         value={quizInfo.category}
                                         onChange={(e) => setQuizInfo({ ...quizInfo, category: e.target.value })}
-                                        style={{ padding: '0.7rem', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', outline: 'none' }}
+                                        className="p-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] outline-hidden focus:border-primary transition-colors"
                                     >
                                         <option>General</option>
                                         <option>Programming</option>
@@ -197,25 +174,25 @@ const CreateQuizPage: React.FC = () => {
                                     </select>
                                 </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                    <label style={{ fontSize: '0.85rem', fontWeight: '600', color: '#64748b' }}>Time Limit (mins)</label>
-                                    <div style={{ position: 'relative' }}>
-                                        <Clock size={16} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[0.85rem] font-semibold text-[#64748b]">Time Limit (mins)</label>
+                                    <div className="relative">
+                                        <Clock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
                                         <input
                                             type="number"
                                             value={quizInfo.timeLimit}
                                             onChange={(e) => setQuizInfo({ ...quizInfo, timeLimit: parseInt(e.target.value) })}
-                                            style={{ width: '100%', padding: '0.7rem 0.7rem 0.7rem 2.5rem', borderRadius: '10px', border: '1px solid #e2e8f0', outline: 'none' }}
+                                            className="w-full py-3 pl-10 pr-3 rounded-xl border border-[#e2e8f0] outline-hidden focus:border-primary transition-colors"
                                         />
                                     </div>
                                 </div>
                             </div>
 
-                            <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', color: '#64748b', fontSize: '0.85rem' }}>
+                            <div className="mt-8 flex flex-col gap-3">
+                                <div className="flex items-center gap-3 text-[#64748b] text-[0.85rem]">
                                     <CheckCircle size={16} /> Saved as Draft
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', color: '#64748b', fontSize: '0.85rem' }}>
+                                <div className="flex items-center gap-3 text-[#64748b] text-[0.85rem]">
                                     <HelpCircle size={16} /> Questions: {questions.length}
                                 </div>
                             </div>

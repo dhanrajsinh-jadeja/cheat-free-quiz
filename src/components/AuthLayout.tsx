@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, CircleDollarSign, TrendingUp, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Timer, TrendingUp, CheckCircle2 } from 'lucide-react';
 
 interface AuthLayoutProps {
     children: React.ReactNode;
@@ -36,7 +36,7 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitle }) =>
                         </div>
                         <div className="floating-card top-[35%] left-[-8%]">
                             <div className="icon-circle bg-linear-to-br from-[#4ade80] to-[#22c55e]">
-                                <CircleDollarSign size={18} />
+                                <Timer size={18} />
                             </div>
                             <span className="font-medium text-text-dark">Real-Time Timed Tests</span>
                         </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, PlusCircle, BookOpen, LogOut, Search, Bell, Menu, X } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { LayoutDashboard, PlusCircle, BookOpen, LogOut, Search, Bell, Menu, X, User as UserIcon } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { authService } from '../services/authService';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -8,12 +9,19 @@ interface DashboardLayoutProps {
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const handleLogout = () => {
+    authService.logout();
+    navigate('/login');
+  };
 
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
     { icon: PlusCircle, label: 'Create Quiz', path: '/create-quiz' },
     { icon: BookOpen, label: 'My Quizzes', path: '/my-quizzes' },
+    { icon: UserIcon, label: 'Profile', path: '/profile' },
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
@@ -66,7 +74,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         </nav>
 
         <div className="border-t border-border-color pt-6">
-          <button className="flex items-center gap-4 w-full p-4 bg-transparent border-none text-text-muted cursor-pointer text-base">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-4 w-full p-4 bg-transparent border-none text-text-muted cursor-pointer text-base hover:text-white transition-colors"
+          >
             <LogOut size={20} />
             <span>Logout</span>
           </button>
@@ -100,13 +111,15 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
               <Bell size={22} />
               <span className="absolute top-[2px] right-[2px] w-2 h-2 bg-[#ef4444] rounded-full border-2 border-white"></span>
             </button>
-            <div className="flex items-center gap-3">
+            <Link to="/profile" className="flex items-center gap-3 no-underline group">
               <div className="text-right hidden xs:block">
-                <p className="text-[0.9rem] font-semibold text-text-dark">Admin User</p>
-                <p className="text-[0.75rem] text-[#94a3b8] hidden md:block">admin@quizmaster.com</p>
+                <p className="text-[0.9rem] font-semibold text-text-dark group-hover:text-primary transition-colors">Dhanrajsinh Jadeja</p>
+                <p className="text-[0.75rem] text-[#94a3b8] hidden md:block">dhanraj@example.com</p>
               </div>
-              <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-[#e2e8f0]"></div>
-            </div>
+              <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all">
+                <UserIcon size={20} />
+              </div>
+            </Link>
           </div>
         </header>
 

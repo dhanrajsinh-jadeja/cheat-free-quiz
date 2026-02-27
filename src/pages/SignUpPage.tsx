@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, Loader2 } from 'lucide-react';
+import { Mail, User, Lock, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 import Input from '../components/Input';
@@ -7,11 +7,12 @@ import Button from '../components/Button';
 import { authService } from '../services/authService';
 import { GoogleLogin } from '@react-oauth/google';
 
-const SignInPage: React.FC = () => {
+const SignUpPage: React.FC = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [formData, setFormData] = useState({
+        fullName: '',
         email: '',
         password: '',
     });
@@ -22,10 +23,10 @@ const SignInPage: React.FC = () => {
         setError(null);
 
         try {
-            await authService.login(formData);
-            navigate('/profile');
+            await authService.signUp(formData);
+            navigate('/login');
         } catch (err: any) {
-            setError(err.message || 'Invalid credentials');
+            setError(err.message || 'Something went wrong');
         } finally {
             setLoading(false);
         }
@@ -33,10 +34,10 @@ const SignInPage: React.FC = () => {
 
     return (
         <AuthLayout
-            title="Sign in to your account"
+            title="Create your account"
             subtitle={
                 <>
-                    Don't have an account? <Link to="/signup" className="text-primary hover:underline font-medium">Sign up for free</Link>
+                    Already have an account? <Link to="/login" className="text-primary hover:underline font-medium">Sign in</Link>
                 </>
             }
         >
@@ -46,6 +47,18 @@ const SignInPage: React.FC = () => {
                         {error}
                     </div>
                 )}
+
+                <div className="flex flex-col gap-2">
+                    <label className="text-[0.95rem] font-medium text-text-white">Full name</label>
+                    <Input
+                        icon={User}
+                        type="text"
+                        placeholder="John Doe"
+                        required
+                        value={formData.fullName}
+                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                    />
+                </div>
 
                 <div className="flex flex-col gap-2">
                     <label className="text-[0.95rem] font-medium text-text-white">Email address</label>
@@ -60,25 +73,19 @@ const SignInPage: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                    <div className="flex justify-between items-center">
-                        <label className="text-[0.95rem] font-medium text-text-white">Password</label>
-                        <a href="#" className="text-[0.85rem] text-primary hover:underline">Forgot your password?</a>
-                    </div>
-                    <div className="relative">
-                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted transition-colors group-focus-within:text-primary" size={20} />
-                        <input
-                            type="password"
-                            placeholder="••••••••"
-                            className="w-full bg-input-bg border border-border-color rounded-lg py-4 pl-12 pr-4 text-text-white text-base outline-hidden transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-blue-500/20"
-                            required
-                            value={formData.password}
-                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        />
-                    </div>
+                    <label className="text-[0.95rem] font-medium text-text-white">Password</label>
+                    <Input
+                        icon={Lock}
+                        type="password"
+                        placeholder="••••••••"
+                        required
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    />
                 </div>
 
                 <Button type="submit" disabled={loading}>
-                    {loading ? <Loader2 className="animate-spin mx-auto" size={20} /> : 'Sign in'}
+                    {loading ? <Loader2 className="animate-spin mx-auto" size={20} /> : 'Create account'}
                 </Button>
 
                 <div className="relative flex items-center py-4">
@@ -96,14 +103,14 @@ const SignInPage: React.FC = () => {
                                     await authService.googleLogin(credentialResponse.credential);
                                     navigate('/profile');
                                 } catch (err: any) {
-                                    setError(err.message || 'Google Login failed');
+                                    setError(err.message || 'Google Sign up failed');
                                 } finally {
                                     setLoading(false);
                                 }
                             }
                         }}
                         onError={() => {
-                            setError('Google Login failed');
+                            setError('Google Sign up failed');
                         }}
                         useOneTap
                         theme="filled_black"
@@ -113,12 +120,8 @@ const SignInPage: React.FC = () => {
                     />
                 </div>
             </form>
-
-            <div className="text-center mt-12 text-text-muted text-[0.85rem] select-none">
-                <p>© 2026 Passwd Generator Inc. All rights reserved.</p>
-            </div>
         </AuthLayout>
     );
 };
 
-export default SignInPage;
+export default SignUpPage;

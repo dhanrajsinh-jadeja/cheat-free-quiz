@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, PlusCircle, BookOpen, LogOut, Search, Bell, Menu, X, User as UserIcon } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, BookOpen, LogOut, Bell, Menu, X, User as UserIcon } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 
@@ -97,14 +97,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
             </button>
           </div>
 
-          <div className="relative max-w-[400px] w-full hidden sm:block">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-            <input
-              type="text"
-              placeholder="Search quizzes..."
-              className="w-full pl-12 pr-4 py-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] outline-hidden text-[0.9rem]"
-            />
-          </div>
+
 
           <div className="flex items-center gap-3 lg:gap-6 ml-auto">
             <button className="relative border-none bg-none cursor-pointer text-[#64748b]">

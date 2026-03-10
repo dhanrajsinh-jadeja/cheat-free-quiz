@@ -6,6 +6,10 @@ export interface Question {
     isMultiCorrect: boolean;
     correctAnswers: number[]; // Indices of correct options
     marks: number;
+    type: 'mcq' | 'multi-mcq' | 'tf' | 'short' | 'paragraph' | 'code';
+    explanation?: string;
+    timer?: number;
+    difficulty?: 'easy' | 'medium' | 'hard';
 }
 
 export type QuizCategory = 'General' | 'Programming' | 'Design' | 'Marketing' | string;
@@ -20,6 +24,23 @@ export interface QuizInfo {
     creatorId: string;
     createdAt: string;
     updatedAt: string;
+    status: 'draft' | 'published';
+    negativeMarking?: {
+        enabled: boolean;
+        penalty: number;
+    };
+    randomization?: {
+        shuffleQuestions: boolean;
+        shuffleOptions: boolean;
+        preventBackNavigation: boolean;
+    };
+    antiCheat?: {
+        disableCopyPaste: boolean;
+        disableTabSwitching: boolean;
+        webcamMonitoring: boolean;
+        fullscreenMode: boolean;
+    };
+    tags?: string[];
 }
 
 export interface Quiz extends QuizInfo {

@@ -7,6 +7,10 @@ interface IQuestion {
   isMultiCorrect: boolean;
   correctAnswers: number[];
   marks: number;
+  type: 'mcq' | 'multi-mcq' | 'tf' | 'short' | 'paragraph' | 'code';
+  explanation?: string;
+  timer?: number; // seconds per question
+  difficulty?: 'easy' | 'medium' | 'hard';
 }
 
 export interface IQuiz extends Document {
@@ -19,9 +23,26 @@ export interface IQuiz extends Document {
   creator: Types.ObjectId;
   questions: IQuestion[];
   isPublished: boolean;
+  status: 'draft' | 'published';
   isActive: boolean;
   startDate?: Date;
   endDate?: Date;
+  negativeMarking?: {
+    enabled: boolean;
+    penalty: number;
+  };
+  randomization?: {
+    shuffleQuestions: boolean;
+    shuffleOptions: boolean;
+    preventBackNavigation: boolean;
+  };
+  antiCheat?: {
+    disableCopyPaste: boolean;
+    disableTabSwitching: boolean;
+    webcamMonitoring: boolean;
+    fullscreenMode: boolean;
+  };
+  tags?: string[];
 }
 
 const questionSchema = new Schema<IQuestion>({
@@ -45,6 +66,18 @@ const questionSchema = new Schema<IQuestion>({
     required: true,
     min: 1,
   },
+  type: {
+    type: String,
+    enum: ['mcq', 'multi-mcq', 'tf', 'short', 'paragraph', 'code'],
+    default: 'mcq',
+  },
+  explanation: String,
+  timer: Number,
+  difficulty: {
+    type: String,
+    enum: ['easy', 'medium', 'hard'],
+    default: 'medium',
+  },
 });
 
 const quizSchema = new Schema<IQuiz>(
@@ -65,12 +98,33 @@ const quizSchema = new Schema<IQuiz>(
       type: Boolean,
       default: false,
     },
+    status: {
+      type: String,
+      enum: ['draft', 'published'],
+      default: 'draft',
+    },
     isActive: {
       type: Boolean,
       default: true,
     },
     startDate: Date,
     endDate: Date,
+    negativeMarking: {
+      enabled: { type: Boolean, default: false },
+      penalty: { type: Number, default: 0.25 },
+    },
+    randomization: {
+      shuffleQuestions: { type: Boolean, default: false },
+      shuffleOptions: { type: Boolean, default: false },
+      preventBackNavigation: { type: Boolean, default: false },
+    },
+    antiCheat: {
+      disableCopyPaste: { type: Boolean, default: false },
+      disableTabSwitching: { type: Boolean, default: false },
+      webcamMonitoring: { type: Boolean, default: false },
+      fullscreenMode: { type: Boolean, default: false },
+    },
+    tags: [String],
   },
   { timestamps: true }
 );

@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, HelpCircle, CheckCircle, Clock, Layout, Copy, X, ExternalLink, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+    Plus, Trash2, HelpCircle, CheckCircle, Clock, Layout, Copy, X, ExternalLink, Loader2,
+    ChevronDown, ChevronRight, ArrowUp, ArrowDown, Eye, Save, Shield, Shuffle,
+    Image as ImageIcon, Code, BookOpen, AlertCircle
+} from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
-import Button from '../components/Button';
 import { quizService } from '../services/quizService';
 
 interface Question {
@@ -10,16 +13,27 @@ interface Question {
     image: string | null;
     options: string[];
     isMultiCorrect: boolean;
-    correctAnswers: number[]; // Array to support multiple correct answers
+    correctAnswers: number[];
     marks: number;
+    type: 'mcq' | 'multi-mcq' | 'tf' | 'short' | 'paragraph' | 'code';
+    explanation: string;
+    timer: number;
+    difficulty: 'easy' | 'medium' | 'hard';
+    collapsed?: boolean;
 }
+
+
 
 const CreateQuizPage: React.FC = () => {
     const [quizInfo, setQuizInfo] = useState({
         title: '',
         description: '',
         category: 'General',
-        timeLimit: 30
+        timeLimit: 30,
+        tags: [] as string[],
+        negativeMarking: { enabled: false, penalty: 0.25 },
+        randomization: { shuffleQuestions: false, shuffleOptions: false, preventBackNavigation: false },
+        antiCheat: { disableCopyPaste: false, disableTabSwitching: false, webcamMonitoring: false, fullscreenMode: false }
     });
 
     const [isPublishing, setIsPublishing] = useState(false);
@@ -28,44 +42,100 @@ const CreateQuizPage: React.FC = () => {
     const [expiresAt, setExpiresAt] = useState<string | null>(null);
     const [copySuccess, setCopySuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [activeQuestionId, setActiveQuestionId] = useState<string>('1');
+    const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+    const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const [activeTab, setActiveTab] = useState<'questions' | 'settings'>('questions');
 
     const [defaultMarks, setDefaultMarks] = useState(1);
     const [questions, setQuestions] = useState<Question[]>([
         {
-            id: '1',
-            text: '',
-            image: null,
-            options: ['', '', '', ''],
-            isMultiCorrect: false,
-            correctAnswers: [0],
-            marks: 1
+            id: '1', text: '', image: null,
+            options: ['', '', '', ''], isMultiCorrect: false, correctAnswers: [],
+            marks: 1, type: 'mcq', explanation: '', timer: 30, difficulty: 'medium', collapsed: false
         }
     ]);
 
+    // Auto-save indicator
+    const triggerAutoSave = useCallback(() => {
+        setAutoSaveStatus('unsaved');
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = setTimeout(() => {
+            setAutoSaveStatus('saving');
+            setTimeout(() => setAutoSaveStatus('saved'), 800);
+        }, 1500);
+    }, []);
+
+    useEffect(() => { triggerAutoSave(); }, [questions, quizInfo, triggerAutoSave]);
+
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                addQuestion();
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    });
+
     const addQuestion = () => {
-        setQuestions([...questions, {
+        const newQ: Question = {
             id: Math.random().toString(36).substr(2, 9),
-            text: '',
-            image: null,
-            options: ['', '', '', ''],
-            isMultiCorrect: false,
-            correctAnswers: [0],
-            marks: defaultMarks
-        }]);
+            text: '', image: null, options: ['', '', '', ''],
+            isMultiCorrect: false, correctAnswers: [],
+            marks: defaultMarks, type: 'mcq', explanation: '',
+            timer: 30, difficulty: 'medium', collapsed: false
+        };
+        setQuestions(prev => [...prev, newQ]);
+        setActiveQuestionId(newQ.id);
     };
 
     const removeQuestion = (id: string) => {
         if (questions.length > 1) {
-            setQuestions(questions.filter(q => q.id !== id));
+            const idx = questions.findIndex(q => q.id === id);
+            setQuestions(prev => prev.filter(q => q.id !== id));
+            setActiveQuestionId(questions[idx === 0 ? 1 : idx - 1]?.id || '');
         }
+    };
+
+    const duplicateQuestion = (id: string) => {
+        const q = questions.find(q => q.id === id);
+        if (!q) return;
+        const newQ = { ...q, id: Math.random().toString(36).substr(2, 9), collapsed: false };
+        const idx = questions.findIndex(q => q.id === id);
+        const updated = [...questions];
+        updated.splice(idx + 1, 0, newQ);
+        setQuestions(updated);
+        setActiveQuestionId(newQ.id);
+    };
+
+    const moveQuestion = (id: string, direction: 'up' | 'down') => {
+        const idx = questions.findIndex(q => q.id === id);
+        if ((direction === 'up' && idx === 0) || (direction === 'down' && idx === questions.length - 1)) return;
+        const updated = [...questions];
+        const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+        [updated[idx], updated[targetIdx]] = [updated[targetIdx], updated[idx]];
+        setQuestions(updated);
+    };
+
+    const toggleCollapse = (id: string) => {
+        setQuestions(prev => prev.map(q => q.id === id ? { ...q, collapsed: !q.collapsed } : q));
     };
 
     const updateQuestion = (id: string, field: string, value: any) => {
         setQuestions(questions.map(q => {
             if (q.id === id) {
-                // If switching to single correct, only keep the first correct answer
-                if (field === 'isMultiCorrect' && value === false) {
+                if (field === 'isMultiCorrect' && value === false)
                     return { ...q, [field]: value, correctAnswers: [q.correctAnswers[0] || 0] };
+                if (field === 'type') {
+                    if (value === 'tf') return { ...q, [field]: value, options: ['True', 'False'], correctAnswers: [], isMultiCorrect: false };
+                    if (value === 'short' || value === 'paragraph' || value === 'code') return { ...q, [field]: value, options: [], correctAnswers: [] };
+                    if (q.options.length === 0) return { ...q, [field]: value, options: ['', '', '', ''], correctAnswers: [] };
+                    if (value === 'mcq') return { ...q, [field]: value, isMultiCorrect: false, correctAnswers: q.correctAnswers.length > 0 ? [q.correctAnswers[0]] : [] };
+                    if (value === 'multi-mcq') return { ...q, [field]: value, isMultiCorrect: true };
                 }
                 return { ...q, [field]: value };
             }
@@ -84,17 +154,31 @@ const CreateQuizPage: React.FC = () => {
         }));
     };
 
+    const addOption = (qId: string) => {
+        setQuestions(questions.map(q => q.id === qId ? { ...q, options: [...q.options, ''] } : q));
+    };
+
+    const removeOption = (qId: string, optIdx: number) => {
+        setQuestions(questions.map(q => {
+            if (q.id === qId && q.options.length > 2) {
+                const newOptions = q.options.filter((_, idx) => idx !== optIdx);
+                const newCorrect = q.correctAnswers.filter(i => i !== optIdx).map(i => i > optIdx ? i - 1 : i);
+                return { ...q, options: newOptions, correctAnswers: newCorrect };
+            }
+            return q;
+        }));
+    };
+
     const toggleCorrectAnswer = (qId: string, optIdx: number) => {
         setQuestions(questions.map(q => {
             if (q.id === qId) {
                 if (q.isMultiCorrect) {
                     const newCorrect = q.correctAnswers.includes(optIdx)
-                        ? q.correctAnswers.filter(idx => idx !== optIdx)
+                        ? q.correctAnswers.filter(i => i !== optIdx)
                         : [...q.correctAnswers, optIdx];
                     return { ...q, correctAnswers: newCorrect.length > 0 ? newCorrect : [optIdx] };
-                } else {
-                    return { ...q, correctAnswers: [optIdx] };
                 }
+                return { ...q, correctAnswers: [optIdx] };
             }
             return q;
         }));
@@ -104,43 +188,67 @@ const CreateQuizPage: React.FC = () => {
         const file = e.target.files?.[0];
         if (file) {
             const reader = new FileReader();
-            reader.onloadend = () => {
-                updateQuestion(qId, 'image', reader.result as string);
-            };
+            reader.onloadend = () => updateQuestion(qId, 'image', reader.result as string);
             reader.readAsDataURL(file);
         }
     };
 
-    const applyDefaultMarksToAll = () => {
-        setQuestions(questions.map(q => ({ ...q, marks: defaultMarks })));
+    const applyDefaultMarksToAll = () => setQuestions(questions.map(q => ({ ...q, marks: defaultMarks })));
+
+    const handleBulkImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const csvText = event.target?.result as string;
+                const lines = csvText.split('\n');
+                const newQuestions: Question[] = [];
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    const row: string[] = [];
+                    let inQuotes = false, currentVal = '';
+                    for (let j = 0; j < lines[i].length; j++) {
+                        const char = lines[i][j];
+                        if (char === '"' && lines[i][j + 1] !== '"') { inQuotes = !inQuotes; }
+                        else if (char === ',' && !inQuotes) { row.push(currentVal.trim().replace(/^"|"$/g, '')); currentVal = ''; }
+                        else { currentVal += char; }
+                    }
+                    row.push(currentVal.trim().replace(/^"|"$/g, ''));
+                    if (row.length >= 6) {
+                        const type = (row[0].toLowerCase().trim() || 'mcq') as Question['type'];
+                        const text = row[1];
+                        const opts = [row[2], row[3], row[4], row[5]].filter(Boolean);
+                        const correctStr = row[6] || '1';
+                        const marks = parseInt(row[7]) || defaultMarks;
+                        let correctAnswers = correctStr.includes(',')
+                            ? correctStr.split(',').map(s => parseInt(s.trim()) - 1).filter(n => !isNaN(n))
+                            : [parseInt(correctStr) - 1 || 0];
+                        let options = type === 'tf' ? ['True', 'False'] : (type === 'short' || type === 'paragraph' || type === 'code') ? [] : (opts.length < 2 ? ['', ''] : opts);
+                        newQuestions.push({ id: Math.random().toString(36).substr(2, 9), text, image: null, options, isMultiCorrect: type === 'multi-mcq', correctAnswers, marks, type, explanation: '', timer: 30, difficulty: 'medium', collapsed: false });
+                    }
+                }
+                if (newQuestions.length > 0) setQuestions(prev => [...prev, ...newQuestions]);
+                else setError('No valid questions found in CSV. Format: Type,Question,Opt1,Opt2,Opt3,Opt4,Correct(1-4),Marks');
+            } catch { setError('Failed to parse CSV file.'); }
+            e.target.value = '';
+        };
+        reader.readAsText(file);
     };
 
     const handlePublish = async () => {
-        setLoading(true);
-        setError(null);
+        setLoading(true); setError(null);
         try {
-            // 1. Create the quiz first
             const totalMarks = questions.reduce((acc, q) => acc + (q.marks || 0), 0);
-            const quizData = {
-                ...quizInfo,
-                questions,
-                totalMarks,
-                passingMarks: Math.ceil(totalMarks * 0.4) // Default 40% passing
-            };
-
+            const quizData = { ...quizInfo, questions, totalMarks, passingMarks: Math.ceil(totalMarks * 0.4), status: 'published' as 'published' | 'draft' };
             const createdQuiz = await quizService.createQuiz(quizData);
-
-            // 2. Publish it immediately
             const publishResult = await quizService.publishQuiz(createdQuiz.id || (createdQuiz as any)._id);
-
             setPublishedUrl(publishResult.quizLink);
             setExpiresAt(new Date(publishResult.expiresAt).toLocaleString());
             setIsPublishing(true);
         } catch (err: any) {
             setError(err.message || 'Failed to publish quiz');
-        } finally {
-            setLoading(false);
-        }
+        } finally { setLoading(false); }
     };
 
     const copyToClipboard = () => {
@@ -152,281 +260,446 @@ const CreateQuizPage: React.FC = () => {
     };
 
     const totalMarks = questions.reduce((acc, q) => acc + (q.marks || 0), 0);
+    const estimatedTime = Math.ceil(questions.reduce((acc, q) => acc + q.timer, 0) / 60);
+
+    const scrollToQuestion = (id: string) => {
+        setActiveQuestionId(id);
+        document.getElementById(`question-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
 
     return (
         <DashboardLayout>
-            <div className="max-w-[1000px] mx-auto">
-                <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+            <div className="max-w-[1100px] mx-auto">
+                {/* Header */}
+                <header className="flex justify-between items-start pt-2 pb-0 sm:pb-4 border-b border-transparent">
                     <div>
-                        <h1 className="text-[1.75rem] sm:text-[2rem] font-extrabold text-text-dark mb-2">Create New Quiz</h1>
-                        <p className="text-[#64748b] text-sm sm:base">Design your quiz by adding questions and setting preferences.</p>
+                        <h1 className="text-[1.5rem] sm:text-[2rem] font-extrabold text-text-dark mb-0.5 sm:mb-1 leading-tight">Create New Quiz</h1>
+                        <p className="text-[#64748b] text-[0.8rem] sm:text-sm leading-snug">Design your quiz by adding questions and setting preferences.</p>
                     </div>
-                    <Button
-                        className="w-full sm:w-auto px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white"
-                        onClick={handlePublish}
-                        disabled={loading}
-                    >
-                        {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : null}
-                        {loading ? 'Publishing...' : 'Publish Quiz'}
-                    </Button>
                 </header>
 
+                {/* Actions Bar */}
+                <div className="bg-white/95 backdrop-blur-md pt-1 pb-2 sm:py-4 border-b border-[#e2e8f0] flex flex-row justify-between items-center sm:gap-4 sticky top-0 z-50 -mx-4 lg:-mx-8 px-4 lg:px-8 mb-6 transition-all shadow-[0_4px_10px_-5px_rgba(0,0,0,0.05)] overflow-x-auto no-scrollbar">
+                    <div className="flex w-full sm:w-auto items-center justify-between sm:justify-start gap-1 sm:gap-3">
+                        <span className={`text-[0.7rem] sm:text-sm font-bold flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl whitespace-nowrap shrink-0 ${autoSaveStatus === 'saved' ? 'text-emerald-600 bg-emerald-50' : autoSaveStatus === 'saving' ? 'text-amber-600 bg-amber-50' : 'text-slate-500 bg-slate-50'}`}>
+                            {autoSaveStatus === 'saved' ? <><CheckCircle size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Auto-Saved</span></> : autoSaveStatus === 'saving' ? <><Loader2 size={14} className="animate-spin sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Saving</span></> : <><AlertCircle size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Unsaved</span></>}
+                        </span>
+
+                        <div className="flex flex-1 sm:flex-none justify-end sm:justify-start items-center gap-1 sm:gap-2 shrink-0">
+                            <button className="px-2 sm:px-5 py-1.5 sm:py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg sm:rounded-xl font-bold flex items-center justify-center gap-1 sm:gap-2 shadow-[0_2px_4px_rgba(0,0,0,0.02)] transition-colors text-[0.7rem] sm:text-sm whitespace-nowrap" onClick={() => { }} disabled={loading}>
+                                <Eye size={13} className="sm:w-4 sm:h-4" /> <span className="inline">Preview</span>
+                            </button>
+                            <button className="px-2 sm:px-5 py-1.5 sm:py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg sm:rounded-xl font-bold flex items-center justify-center gap-1 sm:gap-2 shadow-[0_2px_4px_rgba(0,0,0,0.02)] transition-colors text-[0.7rem] sm:text-sm whitespace-nowrap" onClick={() => { }} disabled={loading}>
+                                <Save size={13} className="sm:w-4 sm:h-4" /> <span className="inline">Save</span><span className="hidden sm:inline">&nbsp;Draft</span>
+                            </button>
+                            <button className="px-2.5 sm:px-6 py-1.5 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg sm:rounded-xl font-bold flex items-center justify-center gap-1 sm:gap-2 shadow-[0_2px_4px_rgba(79,70,229,0.2)] transition-colors text-[0.7rem] sm:text-sm whitespace-nowrap" onClick={handlePublish} disabled={loading}>
+                                {loading ? <Loader2 className="animate-spin w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <CheckCircle size={13} className="sm:w-4 sm:h-4" />}
+                                {loading ? 'Publishing...' : 'Publish'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Tabs Bar */}
+                <div className="flex border-b border-[#e2e8f0] mb-8 z-40 bg-white/60 backdrop-blur-sm sticky top-[73px]">
+                    <button
+                        onClick={() => setActiveTab('questions')}
+                        className={`px-8 py-3.5 font-bold text-[0.95rem] border-b-[3px] transition-colors flex items-center gap-2.5 ${activeTab === 'questions' ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                    >
+                        <Layout size={18} /> Questions
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('settings')}
+                        className={`px-8 py-3.5 font-bold text-[0.95rem] border-b-[3px] transition-colors flex items-center gap-2.5 ${activeTab === 'settings' ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                    >
+                        <Shield size={18} /> Settings
+                    </button>
+                </div>
+
                 {error && (
-                    <div className="mb-6 bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl text-sm font-medium">
-                        {error}
+                    <div className="mb-6 bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl text-sm font-medium flex items-center gap-2">
+                        <AlertCircle size={16} /> {error}
                     </div>
                 )}
 
-                {/* Publish Modal Overlay */}
+                {/* Publish Modal */}
                 {isPublishing && (
                     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-[24px] w-full max-w-[500px] p-8 shadow-2xl relative animate-in fade-in zoom-in duration-300">
-                            <button
-                                onClick={() => setIsPublishing(false)}
-                                className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors"
-                            >
-                                <X size={24} />
-                            </button>
-
+                        <div className="bg-white rounded-[24px] w-full max-w-[500px] p-8 shadow-2xl relative">
+                            <button onClick={() => setIsPublishing(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors"><X size={24} /></button>
                             <div className="text-center mb-8">
-                                <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <CheckCircle size={32} />
-                                </div>
+                                <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle size={32} /></div>
                                 <h2 className="text-2xl font-bold text-slate-800">Quiz Published!</h2>
                                 <p className="text-slate-500 mt-2">Your quiz is now live and ready for students.</p>
-                                <div className="mt-4 px-4 py-2 bg-amber-50 rounded-lg inline-block">
-                                    <p className="text-amber-700 text-xs font-bold uppercase tracking-wider mb-1">Link Expires At</p>
-                                    <p className="text-amber-900 font-mono text-sm">{expiresAt}</p>
-                                </div>
+                                {expiresAt && <div className="mt-4 px-4 py-2 bg-amber-50 rounded-lg inline-block"><p className="text-amber-700 text-xs font-bold uppercase tracking-wider mb-1">Link Expires At</p><p className="text-amber-900 font-mono text-sm">{expiresAt}</p></div>}
                             </div>
-
                             <div className="space-y-4">
                                 <div>
                                     <label className="text-sm font-semibold text-slate-500 mb-2 block">Quiz Link</label>
                                     <div className="flex gap-2">
-                                        <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-600 text-sm truncate font-medium">
-                                            {publishedUrl}
-                                        </div>
-                                        <button
-                                            onClick={copyToClipboard}
-                                            className={`px-4 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${copySuccess ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                                                }`}
-                                        >
-                                            {copySuccess ? <CheckCircle size={18} /> : <Copy size={18} />}
-                                            {copySuccess ? 'Copied' : 'Copy'}
+                                        <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-600 text-sm truncate font-medium">{publishedUrl}</div>
+                                        <button onClick={copyToClipboard} className={`px-4 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${copySuccess ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
+                                            {copySuccess ? <CheckCircle size={18} /> : <Copy size={18} />}{copySuccess ? 'Copied' : 'Copy'}
                                         </button>
                                     </div>
                                 </div>
-
-                                <a
-                                    href={publishedUrl || '/'}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="flex items-center justify-center gap-2 w-full py-4 text-indigo-600 font-bold hover:bg-indigo-50 rounded-xl transition-colors"
-                                >
-                                    <ExternalLink size={18} />
-                                    Preview Quiz
-                                </a>
+                                <a href={publishedUrl || '/'} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full py-4 text-indigo-600 font-bold hover:bg-indigo-50 rounded-xl transition-colors"><ExternalLink size={18} /> Preview Quiz</a>
                             </div>
                         </div>
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 lg:gap-8">
-                    {/* Main Editor */}
-                    <div className="flex flex-col gap-6 lg:gap-8 order-2 lg:order-1">
-                        {/* Quiz Info Card */}
-                        <div className="bg-white p-6 sm:p-8 rounded-[20px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)] border border-[#e2e8f0]">
-                            <h3 className="text-[1.1rem] sm:text-[1.2rem] font-bold mb-6 flex items-center gap-3">
-                                <Layout size={20} className="text-primary" /> Quiz Basics
-                            </h3>
-                            <div className="flex flex-col gap-6">
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-[0.9rem] font-semibold text-[#475569]">Quiz Title</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. Modern Web Development"
-                                        value={quizInfo.title}
-                                        onChange={(e) => setQuizInfo({ ...quizInfo, title: e.target.value })}
-                                        className="p-3 px-4 rounded-xl border border-[#e2e8f0] outline-hidden transition-colors focus:border-primary w-full"
-                                    />
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-[0.9rem] font-semibold text-[#475569]">Description</label>
-                                    <textarea
-                                        placeholder="What is this quiz about?"
-                                        value={quizInfo.description}
-                                        onChange={(e) => setQuizInfo({ ...quizInfo, description: e.target.value })}
-                                        className="p-3 px-4 rounded-xl border border-[#e2e8f0] outline-hidden min-h-[100px] resize-y transition-colors focus:border-primary w-full"
-                                    />
+                {activeTab === 'questions' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 lg:gap-8">
+                        {/* Main Editor */}
+                        <div className="flex flex-col gap-6 order-2 lg:order-1">
+                            {/* Quiz Basics Card */}
+                            <div className="bg-white p-6 sm:p-8 rounded-[20px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)] border border-[#e2e8f0]">
+                                <h3 className="text-[1.1rem] font-bold mb-5 flex items-center gap-2.5 text-slate-800">
+                                    <span className="w-7 h-7 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center"><BookOpen size={15} /></span>
+                                    Quiz Basics
+                                </h3>
+                                <div className="flex flex-col gap-5">
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[0.88rem] font-semibold text-slate-600">Quiz Title</label>
+                                        <input type="text" placeholder="e.g. Modern Web Development" value={quizInfo.title}
+                                            onChange={(e) => setQuizInfo({ ...quizInfo, title: e.target.value })}
+                                            className="p-3 px-4 rounded-xl border border-[#e2e8f0] outline-hidden transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 w-full text-slate-800 font-medium" />
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[0.88rem] font-semibold text-slate-600">Description</label>
+                                        <textarea placeholder="What is this quiz about?" value={quizInfo.description}
+                                            onChange={(e) => setQuizInfo({ ...quizInfo, description: e.target.value })}
+                                            className="p-3 px-4 rounded-xl border border-[#e2e8f0] outline-hidden min-h-[90px] resize-y transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 w-full text-slate-800" />
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Questions Header */}
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-[1.2rem] sm:text-[1.4rem] font-bold text-text-dark">Questions ({questions.length})</h3>
-                            <button
-                                onClick={addQuestion}
-                                className="flex items-center gap-2 px-4 sm:px-5 py-2.5 bg-white border border-[#e2e8f0] rounded-xl font-semibold text-primary cursor-pointer transition-all hover:bg-white/5 active:scale-95 text-sm sm:text-base"
-                            >
-                                <Plus size={18} /> Add Question
+                            {/* Questions Header */}
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-[1.2rem] sm:text-[1.4rem] font-bold text-text-dark">
+                                    Questions <span className="text-slate-400 font-normal text-base">({questions.length})</span>
+                                </h3>
+                                <div className="flex gap-2">
+                                    <label className="flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-600 rounded-xl font-semibold cursor-pointer hover:bg-slate-200 text-sm transition-colors" title="Import from CSV">
+                                        <ExternalLink size={15} /> Import CSV
+                                        <input type="file" accept=".csv" className="hidden" onChange={handleBulkImport} />
+                                    </label>
+                                    <button onClick={addQuestion} className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-bold cursor-pointer hover:bg-indigo-700 active:scale-95 text-sm shadow-sm transition-all" title="Ctrl+Enter">
+                                        <Plus size={17} /> Add Question
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Question Cards */}
+                            {questions.map((q, idx) => {
+                                const isActive = activeQuestionId === q.id;
+                                return (
+                                    <div key={q.id} id={`question-${q.id}`}
+                                        className={`bg-white rounded-[20px] transition-all duration-200 ${isActive ? 'border-[3px] border-indigo-500 shadow-[0_0_0_4px_rgba(99,102,241,0.15)]' : 'border border-[#e2e8f0] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.04)] hover:border-indigo-200'}`}
+                                        onClick={() => setActiveQuestionId(q.id)}>
+
+                                        {/* Question Header Bar */}
+                                        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 rounded-t-[20px]">
+                                            <button onClick={() => toggleCollapse(q.id)} className="text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
+                                                {q.collapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
+                                            </button>
+                                            <span className="text-[0.8rem] font-extrabold text-indigo-600 uppercase tracking-wider flex-shrink-0">Q{idx + 1}</span>
+                                            <div className="flex-1"></div>
+
+                                            {/* Right-side controls */}
+                                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                <span className="text-[0.7rem] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">{q.marks} pt{q.marks !== 1 ? 's' : ''}</span>
+
+                                                <div className="w-px h-4 bg-slate-200 mx-1" />
+
+                                                <button onClick={(e) => { e.stopPropagation(); moveQuestion(q.id, 'up'); }} disabled={idx === 0} className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ArrowUp size={14} /></button>
+                                                <button onClick={(e) => { e.stopPropagation(); moveQuestion(q.id, 'down'); }} disabled={idx === questions.length - 1} className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ArrowDown size={14} /></button>
+                                                <button onClick={(e) => { e.stopPropagation(); duplicateQuestion(q.id); }} className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" title="Duplicate"><Copy size={14} /></button>
+                                                <button onClick={(e) => { e.stopPropagation(); removeQuestion(q.id); }} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
+                                            </div>
+                                        </div>
+
+                                        {/* Question Body */}
+                                        {!q.collapsed && (
+                                            <div className="p-6 sm:p-7 flex flex-col gap-6">
+                                                {/* Meta row: Type | Marks */}
+                                                <div className="flex flex-wrap gap-2">
+                                                    <div className="flex items-center gap-1.5 border border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50">
+                                                        <BookOpen size={13} className="text-slate-400" />
+                                                        <select value={q.type} onChange={(e) => updateQuestion(q.id, 'type', e.target.value)} className="bg-transparent border-none text-[0.8rem] font-semibold text-slate-700 outline-hidden cursor-pointer">
+                                                            <option value="mcq">Multiple Choice</option>
+                                                            <option value="multi-mcq">Multiple Answer</option>
+                                                            <option value="tf">True / False</option>
+                                                            <option value="short">Short Answer</option>
+                                                            <option value="paragraph">Paragraph</option>
+                                                            <option value="code">Code Snippet</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 border border-indigo-200 rounded-lg px-3 py-1.5 bg-indigo-50">
+                                                        <span className="text-[0.8rem] font-semibold text-indigo-600">Marks:</span>
+                                                        <input type="number" value={q.marks} min={0} onChange={(e) => updateQuestion(q.id, 'marks', parseInt(e.target.value) || 0)} className="w-10 bg-transparent border-none text-[0.8rem] font-bold text-indigo-700 outline-hidden text-center" />
+                                                    </div>
+                                                </div>
+
+                                                {/* Question Text */}
+                                                <div className="flex flex-col gap-2">
+                                                    <label className="text-[0.85rem] font-semibold text-slate-600">Question Text</label>
+                                                    <textarea
+                                                        placeholder="Enter your question here... (Be specific and clear)"
+                                                        value={q.text}
+                                                        onChange={(e) => updateQuestion(q.id, 'text', e.target.value)}
+                                                        className="w-full p-4 text-[1rem] font-medium rounded-xl border border-[#e2e8f0] outline-hidden focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors min-h-[100px] resize-y text-slate-800"
+                                                    />
+                                                    {/* Media Attachments */}
+                                                    <div className="flex gap-2 mt-1">
+                                                        <label className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 text-xs font-semibold cursor-pointer hover:bg-slate-100 hover:text-indigo-600 hover:border-indigo-200 transition-colors">
+                                                            <ImageIcon size={13} /> Add Image
+                                                            <input type="file" accept="image/*" hidden onChange={(e) => handleImageUpload(q.id, e)} />
+                                                        </label>
+                                                        <button onClick={() => updateQuestion(q.id, 'type', 'code')} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 text-xs font-semibold hover:bg-slate-100 hover:text-indigo-600 hover:border-indigo-200 transition-colors">
+                                                            <Code size={13} /> Add Code
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Image Preview */}
+                                                {q.image && (
+                                                    <div className="relative inline-block w-fit group">
+                                                        <img src={q.image} alt="Question" className="max-w-full max-h-[280px] rounded-xl border border-[#e2e8f0] shadow-sm" />
+                                                        <button onClick={() => updateQuestion(q.id, 'image', null)} className="absolute -top-3 -right-3 bg-red-500 text-white p-1.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={13} /></button>
+                                                    </div>
+                                                )}
+
+                                                {/* Options */}
+                                                {q.type === 'mcq' || q.type === 'multi-mcq' || q.type === 'tf' ? (
+                                                    <div className="flex flex-col gap-2">
+                                                        <label className="text-[0.85rem] font-semibold text-slate-600">Answer Options
+                                                            {q.type === 'multi-mcq' && <span className="ml-2 text-xs text-indigo-500 font-medium">(select all correct answers)</span>}
+                                                        </label>
+                                                        <div className="flex flex-col gap-2.5">
+                                                            {q.options.map((opt, optIdx) => {
+                                                                const isCorrect = q.correctAnswers.includes(optIdx);
+                                                                return (
+                                                                    <div key={optIdx} className={`flex items-center gap-3 p-3 pl-4 rounded-xl border-2 transition-all duration-200 ${isCorrect ? 'bg-emerald-50 border-emerald-400' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => toggleCorrectAnswer(q.id, optIdx)}
+                                                                            className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isCorrect ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 hover:border-emerald-400'}`}
+                                                                        >
+                                                                            {isCorrect && <CheckCircle size={14} className="text-white" />}
+                                                                        </button>
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder={`Option ${optIdx + 1}`}
+                                                                            value={opt}
+                                                                            onChange={(e) => updateOption(q.id, optIdx, e.target.value)}
+                                                                            disabled={q.type === 'tf'}
+                                                                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOption(q.id); } }}
+                                                                            className={`border-none bg-transparent w-full outline-hidden text-[0.95rem] focus:ring-0 ${isCorrect ? 'font-semibold text-emerald-800' : 'text-slate-700'} disabled:text-slate-600 disabled:font-medium`}
+                                                                        />
+                                                                        {isCorrect && <span className="text-[0.7rem] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">✓ Correct</span>}
+                                                                        {q.type !== 'tf' && q.options.length > 2 && (
+                                                                            <button onClick={() => removeOption(q.id, optIdx)} className="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0"><X size={15} /></button>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            {q.type !== 'tf' && (
+                                                                <button onClick={() => addOption(q.id)} className="flex items-center gap-2 p-3 rounded-xl border-2 border-dashed border-slate-300 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 transition-all font-semibold text-sm">
+                                                                    <Plus size={16} /> Add New Option <span className="text-xs font-normal opacity-60 ml-1">(or press Enter on last option)</span>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-5 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
+                                                        <p className="text-slate-500 text-sm font-medium text-center">
+                                                            {q.type === 'code' ? '💻 Code snippet answers will be graded manually or via automated tests.' : q.type === 'paragraph' ? '📝 Long-form paragraph answers will be reviewed manually.' : '✍️ Short text answers will be graded manually or with keyword matching.'}
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {/* Explanation */}
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="text-[0.85rem] font-semibold text-slate-600 flex items-center gap-2">
+                                                        <HelpCircle size={15} className="text-indigo-400" /> Answer Explanation <span className="text-slate-400 font-normal">(Optional — shown after quiz)</span>
+                                                    </label>
+                                                    <textarea
+                                                        placeholder="Explain why the correct answer is right..."
+                                                        value={q.explanation}
+                                                        onChange={(e) => updateQuestion(q.id, 'explanation', e.target.value)}
+                                                        className="w-full p-3 rounded-xl border border-[#e2e8f0] outline-hidden focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors min-h-[72px] text-sm resize-y bg-slate-50 text-slate-700"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+
+                            {/* Add Question Footer */}
+                            <button onClick={addQuestion} className="flex items-center justify-center gap-2 p-4 rounded-[20px] border-2 border-dashed border-slate-200 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 transition-all font-bold text-sm">
+                                <Plus size={18} /> Add New Question <span className="text-xs font-normal opacity-60">(Ctrl+Enter)</span>
                             </button>
                         </div>
 
-                        {/* Question Cards */}
-                        {questions.map((q, idx) => (
-                            <div key={q.id} className="bg-white p-6 sm:p-8 rounded-[20px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)] border border-[#e2e8f0] relative">
-                                <div className="absolute top-6 right-6 flex gap-3 items-center">
-                                    <div className="flex items-center gap-2 bg-[#f8fafc] px-3 py-1.5 rounded-lg border border-[#e2e8f0]">
-                                        <span className="text-[0.75rem] font-bold text-[#64748b]">Multi Correct</span>
-                                        <input
-                                            type="checkbox"
-                                            checked={q.isMultiCorrect}
-                                            onChange={(e) => updateQuestion(q.id, 'isMultiCorrect', e.target.checked)}
-                                            className="w-4 h-4 accent-primary cursor-pointer"
-                                        />
-                                    </div>
-                                    <div className="flex items-center gap-2 bg-[#f1f5f9] px-3 py-1.5 rounded-lg">
-                                        <span className="text-[0.75rem] font-bold text-[#64748b]">Marks:</span>
-                                        <input
-                                            type="number"
-                                            value={q.marks}
-                                            onChange={(e) => updateQuestion(q.id, 'marks', parseInt(e.target.value) || 0)}
-                                            className="w-10 border-none bg-transparent outline-hidden text-[0.85rem] font-bold text-primary text-center"
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={() => removeQuestion(q.id)}
-                                        className="border-none bg-[#fee2e2] text-[#ef4444] p-2 rounded-lg cursor-pointer hover:bg-[#fecaca] transition-colors"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
+                        {/* Sidebar */}
+                        <div className="flex flex-col gap-6 order-1 lg:order-2 lg:sticky lg:top-[90px] lg:h-[calc(100vh-100px)] lg:overflow-y-auto pb-8 pr-2 custom-scrollbar">
+
+                            {/* Question Navigator */}
+                            <div className="bg-white p-4 rounded-[20px] border border-[#e2e8f0] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.04)] shrink-0">
+                                <h4 className="text-[0.85rem] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                    <span className="w-4 h-4 bg-indigo-100 rounded flex items-center justify-center"><span className="text-[8px] font-black text-indigo-600">Q</span></span>
+                                    Questions
+                                </h4>
+                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                    {questions.map((q, idx) => (
+                                        <button
+                                            key={q.id}
+                                            onClick={() => scrollToQuestion(q.id)}
+                                            className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${activeQuestionId === q.id ? 'bg-indigo-600 text-white shadow-sm' : q.text ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+                                            title={q.text || `Question ${idx + 1}`}
+                                        >
+                                            {idx + 1}
+                                        </button>
+                                    ))}
+                                    <button onClick={addQuestion} className="w-8 h-8 rounded-lg text-xs font-bold bg-slate-50 text-slate-400 hover:bg-indigo-50 hover:text-indigo-500 border border-dashed border-slate-300 transition-all">+</button>
                                 </div>
 
-                                <div className="mb-6 mr-40 sm:mr-64">
-                                    <span className="text-[0.8rem] sm:text-[0.85rem] font-extrabold text-primary uppercase block mb-2">
-                                        Question {idx + 1}
-                                    </span>
-                                    <div className="flex flex-col gap-4">
-                                        <div className="relative">
-                                            <input
-                                                type="text"
-                                                placeholder="Enter your question here..."
-                                                value={q.text}
-                                                onChange={(e) => updateQuestion(q.id, 'text', e.target.value)}
-                                                className="w-full p-3 sm:p-4 text-[1rem] sm:text-[1.1rem] font-medium rounded-xl border border-[#e2e8f0] outline-hidden focus:border-primary transition-colors pr-12"
-                                            />
-                                            <label className="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer text-primary hover:text-primary/80 transition-colors">
-                                                <Plus size={20} />
-                                                <input type="file" accept="image/*" hidden onChange={(e) => handleImageUpload(q.id, e)} />
+                                {/* Live Summary */}
+                                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 rounded-xl p-3.5 border border-indigo-100">
+                                    <p className="text-[0.72rem] font-bold text-indigo-500 uppercase tracking-wider mb-2.5">Quiz Summary</p>
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[0.8rem] text-slate-600">Total Questions</span>
+                                            <span className="font-bold text-slate-800">{questions.length}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[0.8rem] text-slate-600">Total Marks</span>
+                                            <span className="font-bold text-indigo-700">{totalMarks}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[0.8rem] text-slate-600">Est. Time</span>
+                                            <span className="font-bold text-slate-800">~{estimatedTime} min</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[0.8rem] text-slate-600">Quiz Limit</span>
+                                            <span className="font-bold text-slate-800">{quizInfo.timeLimit} min</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'settings' && (
+                    <div className="max-w-[800px] mx-auto flex flex-col gap-6">
+                        {/* Settings Panel Content */}
+                        <div className="bg-white p-6 sm:p-8 rounded-[20px] border border-[#e2e8f0] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.04)]">
+                            {/* Quiz Settings Group */}
+                            <div className="mb-6">
+                                <p className="text-[0.72rem] font-bold text-slate-400 uppercase tracking-wider mb-4">Quiz Metadata</p>
+                                <div className="flex flex-col gap-5">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                        <div>
+                                            <label className="text-[0.88rem] font-semibold text-slate-600 mb-2 block">Category</label>
+                                            <select value={quizInfo.category} onChange={(e) => setQuizInfo({ ...quizInfo, category: e.target.value })} className="w-full p-3 px-4 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] outline-hidden focus:border-indigo-400 text-sm font-medium text-slate-700">
+                                                <option>General</option><option>Programming</option><option>Design</option><option>Marketing</option><option>Science</option><option>Mathematics</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-[0.88rem] font-semibold text-slate-600 mb-2 block">Total Time Limit (mins)</label>
+                                            <div className="relative">
+                                                <Clock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                <input type="number" value={quizInfo.timeLimit} onChange={(e) => setQuizInfo({ ...quizInfo, timeLimit: parseInt(e.target.value) || 0 })} className="w-full py-3 pl-10 pr-4 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] outline-hidden focus:border-indigo-400 text-sm font-medium text-slate-700" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-[0.88rem] font-semibold text-slate-600 mb-2 block">Tags</label>
+                                        <input type="text" placeholder="HTML, CSS, React…" value={quizInfo.tags.join(', ')} onChange={(e) => setQuizInfo({ ...quizInfo, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })} className="w-full p-3 px-4 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] outline-hidden focus:border-indigo-400 text-sm font-medium text-slate-700" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="h-px bg-slate-100 my-1" />
+
+                            {/* Scoring Group */}
+                            <div className="my-4">
+                                <p className="text-[0.72rem] font-bold text-slate-400 uppercase tracking-wider mb-3">Scoring</p>
+                                <div className="flex flex-col gap-3">
+                                    <div>
+                                        <label className="text-[0.82rem] font-semibold text-slate-600 mb-1.5 block">Default Marks / Question</label>
+                                        <div className="flex gap-2">
+                                            <input type="number" value={defaultMarks} onChange={(e) => setDefaultMarks(parseInt(e.target.value) || 0)} className="flex-1 p-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] outline-hidden focus:border-indigo-400 text-sm font-medium text-slate-700" />
+                                            <button onClick={applyDefaultMarksToAll} className="px-3 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xs hover:bg-indigo-100 transition-colors whitespace-nowrap">Apply All</button>
+                                        </div>
+                                    </div>
+                                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                        <div className="bg-slate-50 px-3 py-2.5 border-b border-slate-200 font-bold text-[0.82rem] text-slate-700 flex justify-between items-center">
+                                            Negative Marking
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" className="sr-only peer" checked={quizInfo.negativeMarking.enabled} onChange={(e) => setQuizInfo({ ...quizInfo, negativeMarking: { ...quizInfo.negativeMarking, enabled: e.target.checked } })} />
+                                                <div className="w-8 h-[18px] bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-[14px] after:w-[14px] after:transition-all peer-checked:bg-indigo-600"></div>
                                             </label>
                                         </div>
-
-                                        {q.image && (
-                                            <div className="relative inline-block w-fit group">
-                                                <img src={q.image} alt="Question" className="max-w-full max-h-[300px] rounded-xl border border-[#e2e8f0] shadow-sm" />
-                                                <button
-                                                    onClick={() => updateQuestion(q.id, 'image', null)}
-                                                    className="absolute -top-3 -right-3 bg-red-500 text-white p-1.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
+                                        {quizInfo.negativeMarking.enabled && (
+                                            <div className="p-3 bg-white flex items-center justify-between gap-2">
+                                                <span className="text-[0.8rem] font-semibold text-slate-600">Penalty (marks)</span>
+                                                <input type="number" step="0.25" className="w-20 p-1.5 border border-slate-200 rounded-lg text-sm text-center font-bold text-red-500 outline-hidden focus:border-red-300" value={quizInfo.negativeMarking.penalty} onChange={(e) => setQuizInfo({ ...quizInfo, negativeMarking: { ...quizInfo.negativeMarking, penalty: parseFloat(e.target.value) || 0 } })} />
                                             </div>
                                         )}
                                     </div>
                                 </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {q.options.map((opt, optIdx) => {
-                                        const isCorrect = q.correctAnswers.includes(optIdx);
-                                        return (
-                                            <div key={optIdx} className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 ${isCorrect ? 'bg-emerald-50 border-emerald-400 shadow-sm' : 'bg-[#f8fafc] border-[#e2e8f0]'}`}>
-                                                <input
-                                                    type={q.isMultiCorrect ? "checkbox" : "radio"}
-                                                    name={`correct-${q.id}`}
-                                                    checked={isCorrect}
-                                                    onChange={() => toggleCorrectAnswer(q.id, optIdx)}
-                                                    className="w-5 h-5 accent-emerald-500 cursor-pointer flex-shrink-0"
-                                                />
-                                                <input
-                                                    type="text"
-                                                    placeholder={`Option ${optIdx + 1}`}
-                                                    value={opt}
-                                                    onChange={(e) => updateOption(q.id, optIdx, e.target.value)}
-                                                    className="border-none bg-transparent w-full outline-hidden text-[0.9rem] sm:text-[0.95rem] focus:ring-0"
-                                                />
-                                            </div>
-                                        );
-                                    })}
-                                </div>
                             </div>
-                        ))}
-                    </div>
 
-                    {/* Sidebar Settings */}
-                    <div className="flex flex-col gap-6 order-1 lg:order-2">
-                        <div className="bg-white p-6 rounded-[20px] border border-[#e2e8f0] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)] lg:sticky lg:top-8">
-                            <h4 className="text-base font-bold mb-5 text-text-dark">Settings</h4>
+                            <div className="h-px bg-slate-100 my-1" />
 
-                            <div className="flex flex-col gap-5">
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-[0.85rem] font-semibold text-[#64748b]">Category</label>
-                                    <select
-                                        value={quizInfo.category}
-                                        onChange={(e) => setQuizInfo({ ...quizInfo, category: e.target.value })}
-                                        className="p-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] outline-hidden focus:border-primary transition-colors w-full"
-                                    >
-                                        <option>General</option>
-                                        <option>Programming</option>
-                                        <option>Design</option>
-                                        <option>Marketing</option>
-                                    </select>
-                                </div>
-
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-[0.85rem] font-semibold text-[#64748b]">Time Limit (mins)</label>
-                                    <div className="relative w-full">
-                                        <Clock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-                                        <input
-                                            type="number"
-                                            value={quizInfo.timeLimit}
-                                            onChange={(e) => setQuizInfo({ ...quizInfo, timeLimit: parseInt(e.target.value) || 0 })}
-                                            className="w-full py-3 pl-10 pr-3 rounded-xl border border-[#e2e8f0] outline-hidden focus:border-primary transition-colors"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="border-t border-[#f1f5f9] pt-5">
-                                    <label className="text-[0.85rem] font-semibold text-[#64748b] mb-2 block">Default Marks per Question</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="number"
-                                            value={defaultMarks}
-                                            onChange={(e) => setDefaultMarks(parseInt(e.target.value) || 0)}
-                                            className="w-full p-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] outline-hidden focus:border-primary transition-colors"
-                                        />
-                                        <button
-                                            onClick={applyDefaultMarksToAll}
-                                            className="px-3 bg-primary/10 text-primary rounded-xl font-bold text-[0.75rem] whitespace-nowrap hover:bg-primary/20 transition-colors"
-                                        >
-                                            Apply All
-                                        </button>
-                                    </div>
+                            {/* Randomization Group */}
+                            <div className="my-4">
+                                <p className="text-[0.72rem] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Shuffle size={11} /> Randomization</p>
+                                <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex flex-col gap-2.5">
+                                    {[
+                                        { key: 'shuffleQuestions', label: 'Shuffle Questions' },
+                                        { key: 'shuffleOptions', label: 'Shuffle Options' },
+                                        { key: 'preventBackNavigation', label: 'Prevent Back Navigation' },
+                                    ].map(({ key, label }) => (
+                                        <label key={key} className="flex items-center gap-2.5 cursor-pointer text-[0.82rem] font-medium text-slate-600">
+                                            <input type="checkbox" checked={(quizInfo.randomization as any)[key]} onChange={(e) => setQuizInfo({ ...quizInfo, randomization: { ...quizInfo.randomization, [key]: e.target.checked } })} className="w-4 h-4 accent-indigo-600 rounded" />
+                                            {label}
+                                        </label>
+                                    ))}
                                 </div>
                             </div>
 
-                            <div className="mt-8 flex flex-col gap-3">
-                                <div className="flex items-center gap-3 text-[#64748b] text-[0.85rem]">
-                                    <CheckCircle size={16} /> Total Marks: <span className="font-bold text-primary">{totalMarks}</span>
-                                </div>
-                                <div className="flex items-center gap-3 text-[#64748b] text-[0.85rem]">
-                                    <HelpCircle size={16} /> Total Questions: {questions.length}
+                            <div className="h-px bg-slate-100 my-1" />
+
+                            {/* Security Group */}
+                            <div className="mt-4">
+                                <p className="text-[0.72rem] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Shield size={11} /> Security</p>
+                                <div className="border border-violet-200 rounded-xl overflow-hidden">
+                                    <div className="bg-violet-50 px-3 py-2 border-b border-violet-200 font-bold text-[0.82rem] text-violet-700">Anti-Cheat Settings</div>
+                                    <div className="p-3 bg-white flex flex-col gap-2.5">
+                                        {[
+                                            { key: 'disableCopyPaste', label: 'Disable Copy/Paste' },
+                                            { key: 'disableTabSwitching', label: 'Disable Tab Switching' },
+                                            { key: 'fullscreenMode', label: 'Force Fullscreen' },
+                                            { key: 'webcamMonitoring', label: 'Webcam Monitoring (Pro)' },
+                                        ].map(({ key, label }) => (
+                                            <label key={key} className="flex items-center gap-2.5 cursor-pointer text-[0.82rem] font-medium text-slate-600">
+                                                <input type="checkbox" checked={(quizInfo.antiCheat as any)[key]} onChange={(e) => setQuizInfo({ ...quizInfo, antiCheat: { ...quizInfo.antiCheat, [key]: e.target.checked } })} className="w-4 h-4 accent-violet-600 rounded" />
+                                                {label}
+                                            </label>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                )}
             </div>
         </DashboardLayout>
     );

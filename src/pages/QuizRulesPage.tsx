@@ -10,6 +10,7 @@ const QuizRulesPage: React.FC = () => {
     const [quizTitle, setQuizTitle] = useState("Quiz");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [attemptStatus, setAttemptStatus] = useState<{ attemptCount: number, maxAttempts: number, canAttempt: boolean } | null>(null);
 
     useEffect(() => {
         const fetchQuiz = async () => {
@@ -17,6 +18,12 @@ const QuizRulesPage: React.FC = () => {
             try {
                 const data = await quizService.getQuiz(id);
                 setQuizTitle(data.title);
+
+                // Fetch attempt status if user is logged in
+                if (localStorage.getItem('token')) {
+                    const status = await quizService.getAttemptStatus(id);
+                    setAttemptStatus(status);
+                }
             } catch (err: any) {
                 setError(err.message || 'Failed to load quiz information');
             } finally {
@@ -44,6 +51,14 @@ const QuizRulesPage: React.FC = () => {
             description: "You cannot go back once the quiz is submitted. Review your answers before the timer ends."
         }
     ];
+
+    if (attemptStatus && attemptStatus.maxAttempts > 0) {
+        rules.push({
+            icon: <AlertCircle className="text-indigo-600" size={24} />,
+            title: "Attempt Limit",
+            description: `You have used ${attemptStatus.attemptCount} of ${attemptStatus.maxAttempts} attempts.`
+        });
+    }
 
     if (loading) {
         return (
@@ -120,11 +135,16 @@ const QuizRulesPage: React.FC = () => {
                     </div>
 
                     <Button
-                        className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white text-lg rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-indigo-200"
-                        onClick={() => navigate(`/quiz/take/${id}`)}
+                        className={`w-full py-4 text-lg rounded-2xl flex items-center justify-center gap-3 shadow-lg transition-all ${
+                            attemptStatus?.canAttempt === false 
+                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
+                        }`}
+                        onClick={() => attemptStatus?.canAttempt !== false && navigate(`/quiz/take/${id}`)}
+                        disabled={attemptStatus?.canAttempt === false}
                     >
                         <Play size={22} fill="currentColor" />
-                        Start Quiz Now
+                        {attemptStatus?.canAttempt === false ? 'Attempt Limit Reached' : 'Start Quiz Now'}
                     </Button>
                 </div>
             </div>

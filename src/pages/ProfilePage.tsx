@@ -1,42 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User as UserIcon, Mail, BookOpen, Clock, Award, Camera, Edit2, Check, X } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import Button from '../components/Button';
-import { User } from '../types';
+import { User, UserStats } from '../types';
+import { authService } from '../services/authService';
+import { quizService } from '../services/quizService';
+import { Loader2 } from 'lucide-react';
 
 const ProfilePage: React.FC = () => {
-    // Mock user data - in a real app, this would come from an auth context or API
-    const [user, setUser] = useState<User>({
-        id: '1',
-        fullName: 'Dhanrajsinh Jadeja',
-        email: 'dhanraj@example.com',
-        avatar: '',
-        createdAt: '2024-01-15T10:00:00Z',
-    });
-
+    const [user, setUser] = useState<User | null>(null);
+    const [stats, setStats] = useState<UserStats | null>(null);
+    const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [editForm, setEditForm] = useState({
-        fullName: user.fullName,
-        email: user.email,
-        avatar: user.avatar || '',
+        fullName: '',
+        email: '',
+        avatar: '',
     });
 
-    // Mock stats
-    const stats = {
-        totalQuizzes: 12,
-        avgScore: 88,
-        completedTopics: 5,
-        streak: 4
-    };
-
-    // Mock recent activity
-    const recentQuizzes = [
-        { id: '1', title: 'React Fundamentals', score: 95, date: '2024-02-20', category: 'Programming' },
-        { id: '2', title: 'UI Design Basics', score: 82, date: '2024-02-18', category: 'Design' },
-        { id: '3', title: 'Advanced JavaScript', score: 88, date: '2024-02-15', category: 'Programming' },
-    ];
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [profileData, statsData] = await Promise.all([
+                    authService.getProfile(),
+                    quizService.getUserStats()
+                ]);
+                
+                setUser(profileData);
+                setStats(statsData);
+                setEditForm({
+                    fullName: profileData.fullName,
+                    email: profileData.email,
+                    avatar: profileData.avatar || '',
+                });
+            } catch (error) {
+                console.error('Failed to fetch profile or stats:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
 
     const handleSave = () => {
+        if (!user) return;
         setUser({
             ...user,
             fullName: editForm.fullName,
@@ -44,7 +51,20 @@ const ProfilePage: React.FC = () => {
             avatar: editForm.avatar,
         });
         setIsEditing(false);
+        // Note: In a real app, you'd also call an API to save these changes to the DB.
     };
+
+    if (loading) {
+        return (
+            <DashboardLayout>
+                <div className="flex items-center justify-center h-[60vh]">
+                    <Loader2 className="animate-spin text-primary" size={48} />
+                </div>
+            </DashboardLayout>
+        );
+    }
+
+    if (!user || !stats) return null;
 
     return (
         <DashboardLayout>
@@ -146,7 +166,7 @@ const ProfilePage: React.FC = () => {
                         </div>
                         <div>
                             <p className="text-sm font-bold text-slate-500 uppercase">Quizzes</p>
-                            <h3 className="text-2xl font-extrabold text-slate-800">{stats.totalQuizzes}</h3>
+                            <h3 className="text-2xl font-extrabold text-slate-800">{stats.totalQuizzesTaken}</h3>
                         </div>
                     </div>
                     <div className="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm flex items-center gap-4">
@@ -155,7 +175,7 @@ const ProfilePage: React.FC = () => {
                         </div>
                         <div>
                             <p className="text-sm font-bold text-slate-500 uppercase">Avg. Score</p>
-                            <h3 className="text-2xl font-extrabold text-slate-800">{stats.avgScore}%</h3>
+                            <h3 className="text-2xl font-extrabold text-slate-800">{stats.averageScore}%</h3>
                         </div>
                     </div>
                     <div className="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm flex items-center gap-4">
@@ -173,7 +193,7 @@ const ProfilePage: React.FC = () => {
                         </div>
                         <div>
                             <p className="text-sm font-bold text-slate-500 uppercase">Streak</p>
-                            <h3 className="text-2xl font-extrabold text-slate-800">{stats.streak} Days</h3>
+                            <h3 className="text-2xl font-extrabold text-slate-800">4 Days</h3>
                         </div>
                     </div>
                 </div>
@@ -187,58 +207,93 @@ const ProfilePage: React.FC = () => {
                             <button className="text-indigo-600 font-bold text-sm hover:underline">View All</button>
                         </div>
                         <div className="space-y-4">
-                            {recentQuizzes.map((quiz) => (
-                                <div key={quiz.id} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:border-indigo-100 transition-colors flex items-center justify-between group">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center font-bold text-indigo-600">
-                                            {quiz.category[0]}
+                            {stats.recentActivity.length > 0 ? (
+                                stats.recentActivity.map((activity) => (
+                                    <div key={activity.id} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:border-indigo-100 transition-colors flex items-center justify-between group">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center font-bold text-indigo-600 uppercase">
+                                                {activity.category ? activity.category[0] : 'Q'}
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{activity.title}</h4>
+                                                <p className="text-sm text-slate-500">
+                                                    {activity.category || 'General'} • {new Date(activity.date).toLocaleDateString()}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{quiz.title}</h4>
-                                            <p className="text-sm text-slate-500">{quiz.category} • {quiz.date}</p>
+                                        <div className="text-right">
+                                            <div className={`text-lg font-black ${activity.percentage >= 90 ? 'text-emerald-500' : 'text-slate-800'}`}>
+                                                {activity.score}/{activity.totalMarks}
+                                            </div>
+                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Score</div>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <div className={`text-lg font-black ${quiz.score >= 90 ? 'text-emerald-500' : 'text-slate-800'}`}>
-                                            {quiz.score}/100
-                                        </div>
-                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Score</div>
-                                    </div>
+                                ))
+                            ) : (
+                                <div className="bg-slate-50 p-12 rounded-[32px] text-center border-2 border-dashed border-slate-200">
+                                    <p className="text-slate-400 font-medium">No recent activity found. Start taking quizzes today!</p>
                                 </div>
-                            ))}
+                            )}
                         </div>
                     </div>
 
                     {/* Achievements/Sidebar */}
                     <div className="space-y-6">
-                        <h2 className="text-2xl font-extrabold text-slate-800">Achievements</h2>
-                        <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm space-y-6">
-                            <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 bg-linear-to-br from-amber-400 to-orange-500 rounded-2xl shadow-lg flex items-center justify-center text-white">
-                                    <Award size={28} />
+                        <div className="space-y-6">
+                            <h2 className="text-2xl font-extrabold text-slate-800">Achievements</h2>
+                            <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm space-y-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 bg-linear-to-br from-amber-400 to-orange-500 rounded-2xl shadow-lg flex items-center justify-center text-white">
+                                        <Award size={28} />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-slate-800">Quiz Maven</h4>
+                                        <p className="text-sm text-slate-500">First 10 quizzes done</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h4 className="font-bold text-slate-800">Quiz Maven</h4>
-                                    <p className="text-sm text-slate-500">First 10 quizzes done</p>
+                                <div className="flex items-center gap-4 opacity-50 grayscale">
+                                    <div className="w-14 h-14 bg-slate-200 rounded-2xl flex items-center justify-center text-slate-400">
+                                        <Award size={28} />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-slate-800">Perfect Score</h4>
+                                        <p className="text-sm text-slate-500">Get 100% on a quiz</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4 opacity-50 grayscale">
+                                    <div className="w-14 h-14 bg-slate-200 rounded-2xl flex items-center justify-center text-slate-400">
+                                        <Award size={28} />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-slate-800">Persistent Learner</h4>
+                                        <p className="text-sm text-slate-500">7 day quiz streak</p>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-4 opacity-50 grayscale">
-                                <div className="w-14 h-14 bg-slate-200 rounded-2xl flex items-center justify-center text-slate-400">
-                                    <Award size={28} />
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-slate-800">Perfect Score</h4>
-                                    <p className="text-sm text-slate-500">Get 100% on a quiz</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-4 opacity-50 grayscale">
-                                <div className="w-14 h-14 bg-slate-200 rounded-2xl flex items-center justify-center text-slate-400">
-                                    <Award size={28} />
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-slate-800">Persistent Learner</h4>
-                                    <p className="text-sm text-slate-500">7 day quiz streak</p>
-                                </div>
+                        </div>
+                        
+                        {/* Quiz History Section */}
+                        <div className="space-y-4">
+                            <h3 className="text-xl font-extrabold text-slate-800">Quiz History</h3>
+                            <div className="bg-white p-4 rounded-[24px] border border-slate-100 shadow-sm max-h-[400px] overflow-y-auto space-y-3 custom-scrollbar">
+                                {stats.attemptHistory && stats.attemptHistory.length > 0 ? (
+                                    stats.attemptHistory.map((attempt) => (
+                                        <div key={attempt.id} className="p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:border-indigo-200 transition-colors">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <h5 className="font-bold text-slate-800 text-sm line-clamp-1">{attempt.title}</h5>
+                                                <span className={`text-xs font-black ${attempt.percentage >= 80 ? 'text-emerald-500' : 'text-slate-600'}`}>
+                                                    {attempt.percentage}%
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                                <span>{attempt.category || 'General'}</span>
+                                                <span>{new Date(attempt.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: '2-digit' })}</span>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-center text-slate-400 text-sm py-4">No attempts yet.</p>
+                                )}
                             </div>
                         </div>
                     </div>

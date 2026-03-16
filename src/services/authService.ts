@@ -84,5 +84,65 @@ export const authService = {
      */
     logout: () => {
         localStorage.removeItem('token');
+    },
+
+    /**
+     * Forgot Password
+     */
+    forgotPassword: async (email: string): Promise<{ message: string }> => {
+        const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || 'Failed to send reset email');
+        }
+
+        return result;
+    },
+
+    /**
+     * Reset Password
+     */
+    resetPassword: async (token: string, password: string): Promise<{ message: string }> => {
+        const response = await fetch(`${API_BASE_URL}/auth/reset-password/${token}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || 'Failed to reset password');
+        }
+
+        return result;
+    },
+
+    /**
+     * Get current user profile
+     */
+    getProfile: async (): Promise<User> => {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+            method: 'GET',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || 'Failed to fetch profile');
+        }
+
+        return result;
     }
 };

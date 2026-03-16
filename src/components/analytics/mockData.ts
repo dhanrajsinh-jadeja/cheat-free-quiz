@@ -132,8 +132,8 @@ export const dailyActivityData = [
 ];
 
 export const passFailRatioData = [
-    { name: 'Passed', value: 85, color: '#3b82f6' },
-    { name: 'Failed', value: 15, color: '#f43f5e' },
+    { name: 'Passed', value: 85, color: '#6798e7ff' },
+    { name: 'Failed', value: 15, color: '#e25757ff' },
 ];
 
 export const leaderboardData = [

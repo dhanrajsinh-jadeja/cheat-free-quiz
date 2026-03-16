@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
     Plus, Trash2, HelpCircle, CheckCircle, Clock, Layout, Copy, X, ExternalLink, Loader2,
     ChevronDown, ChevronRight, ArrowUp, ArrowDown, Eye, Save, Shield, Shuffle,
-    Image as ImageIcon, Code, BookOpen, AlertCircle
+    Image as ImageIcon, Code, BookOpen, AlertCircle, Calendar as CalendarIcon
 } from 'lucide-react';
+import { DateRange } from 'react-day-picker';
 import DashboardLayout from '../components/DashboardLayout';
 import { quizService } from '../services/quizService';
+import { CalendarRange } from '../components/CalendarRange';
 
 interface Question {
     id: string;
@@ -25,6 +28,10 @@ interface Question {
 
 
 const CreateQuizPage: React.FC = () => {
+    const [searchParams] = useSearchParams();
+    const editQuizId = searchParams.get('edit');
+    const isEditMode = !!editQuizId;
+
     const [quizInfo, setQuizInfo] = useState({
         title: '',
         description: '',
@@ -33,7 +40,12 @@ const CreateQuizPage: React.FC = () => {
         tags: [] as string[],
         negativeMarking: { enabled: false, penalty: 0.25 },
         randomization: { shuffleQuestions: false, shuffleOptions: false, preventBackNavigation: false },
-        antiCheat: { disableCopyPaste: false, disableTabSwitching: false, webcamMonitoring: false, fullscreenMode: false }
+        antiCheat: { disableCopyPaste: false, disableTabSwitching: false, webcamMonitoring: false, fullscreenMode: false },
+        startDate: new Date() as Date | undefined,
+        endDate: undefined as Date | undefined,
+        startTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+        endTime: "23:59",
+        maxAttempts: 0 // 0 for infinite
     });
 
     const [isPublishing, setIsPublishing] = useState(false);
@@ -68,6 +80,48 @@ const CreateQuizPage: React.FC = () => {
     }, []);
 
     useEffect(() => { triggerAutoSave(); }, [questions, quizInfo, triggerAutoSave]);
+
+    // Fetch quiz for editing
+    useEffect(() => {
+        const fetchQuizForEdit = async () => {
+            if (!editQuizId) return;
+            setLoading(true);
+            try {
+                const data = await quizService.getQuiz(editQuizId);
+                
+
+                setQuizInfo({
+                    title: data.title || '',
+                    description: data.description || '',
+                    category: data.category || 'General',
+                    timeLimit: data.timeLimit || 30,
+                    tags: data.tags || [],
+                    negativeMarking: data.negativeMarking || { enabled: false, penalty: 0.25 },
+                    randomization: data.randomization || { shuffleQuestions: false, shuffleOptions: false, preventBackNavigation: false },
+                    antiCheat: data.antiCheat || { disableCopyPaste: false, disableTabSwitching: false, webcamMonitoring: false, fullscreenMode: false },
+                    startDate: data.startDate ? new Date(data.startDate) : undefined,
+                    endDate: data.endDate ? new Date(data.endDate) : undefined,
+                    startTime: data.startDate ? new Date(data.startDate).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                    endTime: data.endDate ? new Date(data.endDate).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : "23:59",
+                    maxAttempts: data.maxAttempts || 0
+                });
+
+                if (data.questions && data.questions.length > 0) {
+                    setQuestions(data.questions.map((q: any) => ({
+                        ...q,
+                        id: q._id || q.id || Math.random().toString(36).substr(2, 9),
+                        collapsed: true
+                    })));
+                }
+            } catch (err: any) {
+                setError(err.message || 'Failed to load quiz for editing');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchQuizForEdit();
+    }, [editQuizId]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -239,10 +293,58 @@ const CreateQuizPage: React.FC = () => {
     const handlePublish = async () => {
         setLoading(true); setError(null);
         try {
+            // Validation
+            if (!quizInfo.title.trim()) throw new Error('Quiz title is required');
+            
+            for (let i = 0; i < questions.length; i++) {
+                const q = questions[i];
+                const qNum = i + 1;
+                
+                if (!q.text.trim()) throw new Error(`Question ${qNum} text is required`);
+
+                if (['mcq', 'multi-mcq', 'tf'].includes(q.type)) {
+                    if (q.correctAnswers.length === 0) {
+                        throw new Error(`Question ${qNum} (${q.type.toUpperCase()}) must have at least one correct answer selected`);
+                    }
+                    
+                    if (['mcq', 'multi-mcq'].includes(q.type)) {
+                        const filledOptions = q.options.filter(opt => opt.trim() !== '');
+                        if (filledOptions.length < 2) {
+                            throw new Error(`Question ${qNum} (${q.type.toUpperCase()}) must have at least two options filled`);
+                        }
+                    }
+                }
+            }
+
             const totalMarks = questions.reduce((acc, q) => acc + (q.marks || 0), 0);
-            const quizData = { ...quizInfo, questions, totalMarks, passingMarks: Math.ceil(totalMarks * 0.4), status: 'published' as 'published' | 'draft' };
-            const createdQuiz = await quizService.createQuiz(quizData);
-            const publishResult = await quizService.publishQuiz(createdQuiz.id || (createdQuiz as any)._id);
+            const quizData = { ...quizInfo, questions, totalMarks, passingMarks: Math.ceil(totalMarks * 0.4), isPublished: true };
+            
+            let quizId = editQuizId;
+            if (isEditMode && editQuizId) {
+                await quizService.updateQuiz(editQuizId, quizData);
+            } else {
+                const createdQuiz = await quizService.createQuiz(quizData);
+                quizId = createdQuiz.id || createdQuiz._id;
+            }
+            
+            // Combine date and time
+            const finalStartDate = quizInfo.startDate ? new Date(quizInfo.startDate) : new Date();
+            if (quizInfo.startDate) {
+                const [hours, minutes] = quizInfo.startTime.split(':').map(Number);
+                finalStartDate.setHours(hours, minutes, 0, 0);
+            }
+
+            const finalEndDate = quizInfo.endDate ? new Date(quizInfo.endDate) : undefined;
+            if (finalEndDate && quizInfo.endDate) {
+                const [hours, minutes] = quizInfo.endTime.split(':').map(Number);
+                finalEndDate.setHours(hours, minutes, 0, 0);
+            }
+
+            const publishResult = await quizService.publishQuiz(
+                quizId!,
+                finalStartDate,
+                finalEndDate
+            );
             setPublishedUrl(publishResult.quizLink);
             setExpiresAt(new Date(publishResult.expiresAt).toLocaleString());
             setIsPublishing(true);
@@ -273,7 +375,9 @@ const CreateQuizPage: React.FC = () => {
                 {/* Header */}
                 <header className="flex justify-between items-start pt-2 pb-0 sm:pb-4 border-b border-transparent">
                     <div>
-                        <h1 className="text-[1.5rem] sm:text-[2rem] font-extrabold text-text-dark mb-0.5 sm:mb-1 leading-tight">Create New Quiz</h1>
+                        <h1 className="text-[1.5rem] sm:text-[2rem] font-extrabold text-text-dark mb-0.5 sm:mb-1 leading-tight">
+                            {isEditMode ? 'Edit Quiz' : 'Create New Quiz'}
+                        </h1>
                         <p className="text-[#64748b] text-[0.8rem] sm:text-sm leading-snug">Design your quiz by adding questions and setting preferences.</p>
                     </div>
                 </header>
@@ -294,7 +398,7 @@ const CreateQuizPage: React.FC = () => {
                             </button>
                             <button className="px-2.5 sm:px-6 py-1.5 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg sm:rounded-xl font-bold flex items-center justify-center gap-1 sm:gap-2 shadow-[0_2px_4px_rgba(79,70,229,0.2)] transition-colors text-[0.7rem] sm:text-sm whitespace-nowrap" onClick={handlePublish} disabled={loading}>
                                 {loading ? <Loader2 className="animate-spin w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <CheckCircle size={13} className="sm:w-4 sm:h-4" />}
-                                {loading ? 'Publishing...' : 'Publish'}
+                                {loading ? (isEditMode ? 'Updating...' : 'Publishing...') : (isEditMode ? 'Update & Publish' : 'Publish')}
                             </button>
                         </div>
                     </div>
@@ -329,8 +433,13 @@ const CreateQuizPage: React.FC = () => {
                             <button onClick={() => setIsPublishing(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors"><X size={24} /></button>
                             <div className="text-center mb-8">
                                 <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle size={32} /></div>
-                                <h2 className="text-2xl font-bold text-slate-800">Quiz Published!</h2>
-                                <p className="text-slate-500 mt-2">Your quiz is now live and ready for students.</p>
+                                <h2 className="text-2xl font-bold text-slate-800">{isEditMode ? 'Quiz Updated!' : 'Quiz Published!'}</h2>
+                                <p className="text-slate-500 mt-2">
+                                    {isEditMode 
+                                        ? 'Your changes have been saved and the quiz link is updated.' 
+                                        : 'Your quiz is now live and ready for students.'
+                                    }
+                                </p>
                                 {expiresAt && <div className="mt-4 px-4 py-2 bg-amber-50 rounded-lg inline-block"><p className="text-amber-700 text-xs font-bold uppercase tracking-wider mb-1">Link Expires At</p><p className="text-amber-900 font-mono text-sm">{expiresAt}</p></div>}
                             </div>
                             <div className="space-y-4">
@@ -616,7 +725,22 @@ const CreateQuizPage: React.FC = () => {
                                                 <Clock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                                                 <input type="number" value={quizInfo.timeLimit} onChange={(e) => setQuizInfo({ ...quizInfo, timeLimit: parseInt(e.target.value) || 0 })} className="w-full py-3 pl-10 pr-4 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] outline-hidden focus:border-indigo-400 text-sm font-medium text-slate-700" />
                                             </div>
+                                            <div>
+                                            <label className="text-[0.88rem] font-semibold text-slate-600 mb-2 block">Max Attempts per User</label>
+                                            <div className="relative">
+                                                <AlertCircle size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                <input 
+                                                    type="number" 
+                                                    min="0"
+                                                    placeholder="0 for unlimited" 
+                                                    value={quizInfo.maxAttempts} 
+                                                    onChange={(e) => setQuizInfo({ ...quizInfo, maxAttempts: parseInt(e.target.value) || 0 })} 
+                                                    className="w-full py-3 pl-10 pr-4 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] outline-hidden focus:border-indigo-400 text-sm font-medium text-slate-700" 
+                                                />
+                                            </div>
+                                            <p className="text-[0.65rem] text-slate-400 mt-1.5 ml-1 italic font-medium">Set to 0 for unlimited attempts.</p>
                                         </div>
+                                    </div>
                                     </div>
                                     <div>
                                         <label className="text-[0.88rem] font-semibold text-slate-600 mb-2 block">Tags</label>
@@ -694,6 +818,68 @@ const CreateQuizPage: React.FC = () => {
                                                 {label}
                                             </label>
                                         ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="h-px bg-slate-100 my-1" />
+
+                            {/* Scheduling Group */}
+                            <div className="mt-4">
+                                <p className="text-[0.72rem] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5"><CalendarIcon size={11} /> Link Availability Range</p>
+                                <div className="bg-slate-50 border border-slate-200 rounded-[20px] p-6 flex flex-col items-center gap-6">
+                                    <div className="text-center space-y-1">
+                                        <p className="text-sm font-semibold text-slate-700">Select Activation & Expiration Dates</p>
+                                        <p className="text-xs text-slate-500">The quiz link will only work during this period.</p>
+                                    </div>
+                                    <CalendarRange 
+                                        onRangeChange={(range: DateRange | undefined) => {
+                                            setQuizInfo(prev => ({
+                                                ...prev,
+                                                startDate: range?.from,
+                                                endDate: range?.to
+                                            }));
+                                        }} 
+                                    />
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-[600px]">
+                                        <div className="p-4 bg-white border border-slate-200 rounded-[20px] shadow-sm flex flex-col gap-3">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-[0.65rem] font-black text-slate-400 uppercase tracking-wider">Activation</p>
+                                                <div className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[0.65rem] font-bold border border-indigo-100 italic">Starts</div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <p className="text-sm font-bold text-slate-700">{quizInfo.startDate?.toLocaleDateString() || 'Not set'}</p>
+                                                <div className="relative">
+                                                    <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                    <input 
+                                                        type="time" 
+                                                        value={quizInfo.startTime}
+                                                        onChange={(e) => setQuizInfo(prev => ({ ...prev, startTime: e.target.value }))}
+                                                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-indigo-600 outline-hidden focus:border-indigo-400 focus:bg-white transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="p-4 bg-white border border-slate-200 rounded-[20px] shadow-sm flex flex-col gap-3">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-[0.65rem] font-black text-slate-400 uppercase tracking-wider">Expiration</p>
+                                                <div className="px-2 py-0.5 bg-red-50 text-red-600 rounded-md text-[0.65rem] font-bold border border-red-100 italic">Ends</div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <p className="text-sm font-bold text-slate-700">{quizInfo.endDate?.toLocaleDateString() || 'No Expiration'}</p>
+                                                {quizInfo.endDate && (
+                                                    <div className="relative animate-in fade-in slide-in-from-top-1 duration-200">
+                                                        <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                        <input 
+                                                            type="time" 
+                                                            value={quizInfo.endTime}
+                                                            onChange={(e) => setQuizInfo(prev => ({ ...prev, endTime: e.target.value }))}
+                                                            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-red-600 outline-hidden focus:border-red-400 focus:bg-white transition-all"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -1,16 +1,31 @@
-import React, { useState } from 'react';
-import { LayoutDashboard, PlusCircle, BookOpen, LogOut, Bell, Menu, X, User as UserIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { PlusCircle, BookOpen, LogOut, Bell, Menu, X, User as UserIcon } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
+import { User } from '../types';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
+
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const profile = await authService.getProfile();
+        setUser(profile);
+      } catch (error) {
+        console.error('Failed to fetch user profile:', error);
+      }
+    };
+    fetchProfile();
+  }, []);
 
   const handleLogout = () => {
     authService.logout();
@@ -18,7 +33,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   };
 
   const navItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
     { icon: PlusCircle, label: 'Create Quiz', path: '/create-quiz' },
     { icon: BookOpen, label: 'My Quizzes', path: '/my-quizzes' },
     { icon: UserIcon, label: 'Profile', path: '/profile' },
@@ -106,11 +120,19 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
             </button>
             <Link to="/profile" className="flex items-center gap-3 no-underline group">
               <div className="text-right hidden xs:block">
-                <p className="text-[0.9rem] font-semibold text-text-dark group-hover:text-primary transition-colors">Dhanrajsinh Jadeja</p>
-                <p className="text-[0.75rem] text-[#94a3b8] hidden md:block">dhanraj@example.com</p>
+                <p className="text-[0.9rem] font-semibold text-text-dark group-hover:text-primary transition-colors">
+                  {user?.fullName || 'Loading...'}
+                </p>
+                <p className="text-[0.75rem] text-[#94a3b8] hidden md:block">
+                  {user?.email || ''}
+                </p>
               </div>
-              <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all">
-                <UserIcon size={20} />
+              <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all overflow-hidden border border-slate-200 shadow-sm">
+                {user?.avatar ? (
+                  <img src={user.avatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <UserIcon size={20} />
+                )}
               </div>
             </Link>
           </div>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, MoreVertical, Plus, BookOpen, Clock, CheckCircle, FileText, X, Users, Calendar, Download, Eye, Copy, Share2, Trash2, ArrowDownToLine, BarChart2, ListFilter } from 'lucide-react';
+import { Search, Filter, MoreVertical, Plus, BookOpen, Clock, CheckCircle, FileText, X, Users, Calendar, Download, Eye, Copy, Share2, Trash2, BarChart2, ListFilter, Loader2, CheckCheck, Check, AlertCircle } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
+import { quizService } from '../services/quizService';
 
 // --- Mock Data ---
 
@@ -14,18 +15,13 @@ interface Quiz {
     marks: number;
     status: 'draft' | 'published';
     createdAt: string;
+    publishedAt?: string;
     attempts: number;
     avgScore: number;
     tags: string[];
+    startDate?: string;
+    endDate?: string;
 }
-
-const mockQuizzes: Quiz[] = [
-    { id: 'q1', title: 'React Fundamentals', category: 'Programming', questionCount: 15, timeLimit: 20, marks: 30, status: 'published', createdAt: '2026-03-01', attempts: 124, avgScore: 78, tags: ['React', 'Frontend'] },
-    { id: 'q2', title: 'UI/UX Design Basics', category: 'Design', questionCount: 10, timeLimit: 15, marks: 10, status: 'published', createdAt: '2026-03-05', attempts: 56, avgScore: 82, tags: ['Design', 'UI'] },
-    { id: 'q3', title: 'Advanced TypeScript', category: 'Programming', questionCount: 20, timeLimit: 30, marks: 40, status: 'draft', createdAt: '2026-03-08', attempts: 0, avgScore: 0, tags: ['TypeScript'] },
-    { id: 'q4', title: 'Marketing 101', category: 'Marketing', questionCount: 5, timeLimit: 10, marks: 5, status: 'published', createdAt: '2026-02-15', attempts: 312, avgScore: 65, tags: ['Basics'] },
-    { id: 'q5', title: 'Node.js Backend Architecture', category: 'Programming', questionCount: 25, timeLimit: 45, marks: 50, status: 'draft', createdAt: '2026-02-28', attempts: 0, avgScore: 0, tags: ['Node.js', 'Backend'] },
-];
 
 interface AttemptedQuiz {
     id: string;
@@ -38,23 +34,115 @@ interface AttemptedQuiz {
     status: 'passed' | 'failed' | 'completed';
 }
 
-const mockAttemptedQuizzes: AttemptedQuiz[] = [
-    { id: 'aq1', quizTitle: 'JavaScript Basics', category: 'Programming', score: 85, totalMarks: 100, timeTaken: 12, submittedAt: '2026-03-08 10:30 AM', status: 'passed' },
-    { id: 'aq2', quizTitle: 'Advanced CSS', category: 'Design', score: 60, totalMarks: 100, timeTaken: 19, submittedAt: '2026-03-07 02:15 PM', status: 'failed' },
-    { id: 'aq3', quizTitle: 'Git workflow', category: 'Productivity', score: 95, totalMarks: 100, timeTaken: 8, submittedAt: '2026-03-06 09:00 AM', status: 'passed' },
-];
 
 const MyQuizzesPage: React.FC = () => {
-    const [quizzes, setQuizzes] = useState<Quiz[]>(mockQuizzes);
+    const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isResultsLoading, setIsResultsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'published'>('all');
     const [sortOption, setSortOption] = useState<'newest' | 'oldest' | 'most_responses' | 'highest_avg'>('newest');
 
     const [selectedQuizzes, setSelectedQuizzes] = useState<string[]>([]);
+    const [attemptedQuizzes, setAttemptedQuizzes] = useState<AttemptedQuiz[]>([]);
     const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
     const [activeTab, setActiveTab] = useState<'created' | 'attempted'>('created');
     const navigate = useNavigate();
+    
+    // Deletion Modal State
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [quizToDelete, setQuizToDelete] = useState<Quiz | null>(null);
+    const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isBulkDelete, setIsBulkDelete] = useState(false);
+
+    // Fetch user quizzes
+    useEffect(() => {
+        const fetchQuizzes = async () => {
+            setIsLoading(true);
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    setIsLoading(false);
+                    return;
+                }
+                const response = await fetch('http://localhost:5000/api/quiz/my/all', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const formattedQuizzes: Quiz[] = data.map((q: any) => ({
+                        id: q._id,
+                        title: q.title,
+                        category: q.category || 'Uncategorized',
+                        questionCount: q.questions?.length || 0,
+                        timeLimit: q.timeLimit || 0,
+                        marks: q.totalMarks || 0,
+                        status: q.isPublished ? 'published' : 'draft',
+                        createdAt: q.createdAt, // Store raw ISO for sorting
+                        publishedAt: q.publishedAt, // Store raw ISO for sorting
+                        attempts: 0, // To be implemented on backend
+                        avgScore: 0, // To be implemented on backend
+                        tags: q.tags || [],
+                        startDate: q.startDate,
+                        endDate: q.endDate,
+                    }));
+                    setQuizzes(formattedQuizzes);
+                }
+            } catch (error) {
+                console.error("Error fetching quizzes:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        if (activeTab === 'created') {
+            fetchQuizzes();
+        }
+    }, [activeTab]);
+
+    // Fetch user results
+    useEffect(() => {
+        const fetchResults = async () => {
+            setIsResultsLoading(true);
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                const response = await fetch('http://localhost:5000/api/quiz/stats/user', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const formattedResults: AttemptedQuiz[] = data.attemptHistory.map((a: any) => ({
+                        id: a.id,
+                        quizTitle: a.title,
+                        category: a.category || 'Uncategorized',
+                        score: a.score,
+                        totalMarks: a.totalMarks,
+                        timeTaken: 0, // Not provided by this endpoint currently
+                        submittedAt: new Date(a.date).toLocaleString(),
+                        status: (a.score / a.totalMarks) >= 0.4 ? 'passed' : 'failed' // Example logic
+                    }));
+                    setAttemptedQuizzes(formattedResults);
+                }
+            } catch (error) {
+                console.error("Error fetching results:", error);
+            } finally {
+                setIsResultsLoading(false);
+            }
+        };
+
+        if (activeTab === 'attempted') {
+            fetchResults();
+        }
+    }, [activeTab]);
 
     // Click outside to close active dropdown
     useEffect(() => {
@@ -76,12 +164,30 @@ const MyQuizzesPage: React.FC = () => {
         .filter(q => q.title.toLowerCase().includes(searchQuery.toLowerCase()) || q.category.toLowerCase().includes(searchQuery.toLowerCase()))
         .filter(q => statusFilter === 'all' ? true : q.status === statusFilter)
         .sort((a, b) => {
-            if (sortOption === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-            if (sortOption === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+            const getSortTime = (q: Quiz) => {
+                // Prioritize published time for published quizzes, otherwise creation time
+                if (q.status === 'published' && q.publishedAt) return new Date(q.publishedAt).getTime();
+                return new Date(q.createdAt).getTime();
+            };
+
+            if (sortOption === 'newest') return getSortTime(b) - getSortTime(a);
+            if (sortOption === 'oldest') return getSortTime(a) - getSortTime(b);
             if (sortOption === 'most_responses') return b.attempts - a.attempts;
             if (sortOption === 'highest_avg') return b.avgScore - a.avgScore;
             return 0;
         });
+
+    const isQuizActive = (quiz: Quiz) => {
+        if (quiz.status !== 'published') return false;
+        if (!quiz.startDate) return false;
+        return new Date() >= new Date(quiz.startDate);
+    };
+
+    const isQuizExpired = (quiz: Quiz) => {
+        if (quiz.status !== 'published') return false;
+        if (!quiz.endDate) return false;
+        return new Date() > new Date(quiz.endDate);
+    };
 
     const toggleSelectQuiz = (id: string) => {
         setSelectedQuizzes(prev => prev.includes(id) ? prev.filter(qId => qId !== id) : [...prev, id]);
@@ -93,16 +199,47 @@ const MyQuizzesPage: React.FC = () => {
     };
 
     const handleDeleteSelected = () => {
-        if (confirm(`Are you sure you want to delete ${selectedQuizzes.length} quiz(zes) ? `)) {
-            setQuizzes(quizzes.filter(q => !selectedQuizzes.includes(q.id)));
-            setSelectedQuizzes([]);
-        }
+        if (selectedQuizzes.length === 0) return;
+        setQuizToDelete(null);
+        setIsBulkDelete(true);
+        setDeleteConfirmInput('');
+        setIsDeleteModalOpen(true);
     };
 
-    const handleDeleteQuiz = (id: string) => {
-        if (confirm('Are you sure you want to delete this quiz?')) {
-            setQuizzes(quizzes.filter(q => q.id !== id));
-            setSelectedQuizzes(prev => prev.filter(qId => qId !== id));
+    const handleDeleteQuiz = (quiz: Quiz) => {
+        setQuizToDelete(quiz);
+        setIsBulkDelete(false);
+        setDeleteConfirmInput('');
+        setIsDeleteModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        const expectedConfirm = isBulkDelete 
+            ? `DELETE ${selectedQuizzes.length} QUIZZES` 
+            : quizToDelete?.title.toUpperCase();
+
+        if (deleteConfirmInput !== expectedConfirm) return;
+
+        setIsDeleting(true);
+        try {
+            if (isBulkDelete) {
+                await quizService.deleteQuizzesBatch(selectedQuizzes);
+                setQuizzes(quizzes.filter(q => !selectedQuizzes.includes(q.id)));
+                setSelectedQuizzes([]);
+            } else if (quizToDelete) {
+                await quizService.deleteQuiz(quizToDelete.id);
+                setQuizzes(quizzes.filter(q => q.id !== quizToDelete.id));
+                setSelectedQuizzes(prev => prev.filter(qId => qId !== quizToDelete.id));
+            }
+            
+            setIsDeleteModalOpen(false);
+            setQuizToDelete(null);
+            setIsBulkDelete(false);
+        } catch (error) {
+            console.error("Error deleting quiz(zes):", error);
+            alert("Failed to delete. Please try again.");
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -116,12 +253,7 @@ const MyQuizzesPage: React.FC = () => {
                         <p className="text-slate-500 text-sm">Manage quizzes you created and view responses</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <button className="flex-1 sm:flex-none px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold flex items-center justify-center gap-2 shadow-[0_2px_4px_rgba(0,0,0,0.02)] transition-colors text-sm whitespace-nowrap">
-                            <ArrowDownToLine size={16} /> Import Quiz
-                        </button>
-                        <button className="flex-1 sm:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-[0_2px_4px_rgba(79,70,229,0.2)] transition-colors text-sm whitespace-nowrap">
-                            <Plus size={16} /> Create New Quiz
-                        </button>
+                        {/* Main header button removed as per request to move it to created section */}
                     </div>
                 </header>
 
@@ -236,17 +368,47 @@ const MyQuizzesPage: React.FC = () => {
                                         <option value="most_responses">Sort by: Most Responses</option>
                                         <option value="highest_avg">Sort by: Highest Score</option>
                                     </select>
+                                    <button 
+                                        onClick={() => navigate('/create-quiz')}
+                                        className="hidden sm:flex px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold items-center justify-center gap-2 shadow-[0_2px_10px_rgba(79,70,229,0.15)] transition-all transform hover:scale-[1.02] active:scale-[0.98] text-sm whitespace-nowrap ml-2"
+                                    >
+                                        <Plus size={16} strokeWidth={3} /> Create Quiz
+                                    </button>
                                 </div>
                             )}
                         </div>
 
+                        {/* Mobile Create Button */}
+                        <div className="sm:hidden mb-6">
+                            <button 
+                                onClick={() => navigate('/create-quiz')}
+                                className="w-full px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg text-sm"
+                            >
+                                <Plus size={18} strokeWidth={3} /> Create New Quiz
+                            </button>
+                        </div>
+
                         {/* Quiz Grid */}
-                        {filteredQuizzes.length > 0 ? (
+                        {isLoading ? (
+                            <div className="flex flex-col items-center justify-center py-20">
+                                <Loader2 className="animate-spin text-indigo-600 mb-4" size={40} />
+                                <p className="text-slate-500 font-medium">Loading your quizzes...</p>
+                            </div>
+                        ) : filteredQuizzes.length > 0 ? (
                             <div className="flex flex-col gap-4">
                                 {/* Table Header (Desktop only) */}
                                 <div className="hidden md:flex items-center px-6 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
                                     <div className="w-12 flex items-center justify-center">
-                                        <input type="checkbox" checked={selectedQuizzes.length === filteredQuizzes.length && filteredQuizzes.length > 0} onChange={toggleSelectAll} className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" />
+                                        <button 
+                                            onClick={toggleSelectAll}
+                                            className={`group relative flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-300 ${selectedQuizzes.length === filteredQuizzes.length && filteredQuizzes.length > 0 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-slate-200 text-slate-600 hover:bg-slate-300 hover:text-slate-800'}`}
+                                            title={selectedQuizzes.length === filteredQuizzes.length ? "Deselect All" : "Select All"}
+                                        >
+                                            <CheckCheck size={20} strokeWidth={2.5} className={`transition-transform duration-300 ${selectedQuizzes.length === filteredQuizzes.length && filteredQuizzes.length > 0 ? 'scale-110' : 'scale-100'}`} />
+                                            {selectedQuizzes.length > 0 && selectedQuizzes.length < filteredQuizzes.length && (
+                                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white animate-pulse"></div>
+                                            )}
+                                        </button>
                                     </div>
                                     <div className="flex-1 min-w-0">Quiz Details</div>
                                     <div className="w-32 text-center">Status</div>
@@ -260,15 +422,33 @@ const MyQuizzesPage: React.FC = () => {
                                     <div key={quiz.id} className={`bg-white rounded-[20px] border p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center gap-4 sm:gap-6 transition-all duration-200 ${selectedQuizzes.includes(quiz.id) ? 'border-indigo-400 shadow-[0_0_0_3px_rgba(99,102,241,0.1)]' : 'border-[#e2e8f0] hover:border-indigo-200 hover:shadow-md'}`}>
 
                                         <div className="hidden md:flex w-6 items-center justify-center shrink-0">
-                                            <input type="checkbox" checked={selectedQuizzes.includes(quiz.id)} onChange={() => toggleSelectQuiz(quiz.id)} className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer" />
+                                            <button 
+                                                onClick={() => toggleSelectQuiz(quiz.id)}
+                                                className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all duration-200 ${selectedQuizzes.includes(quiz.id) ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-300 text-transparent hover:border-indigo-400 hover:bg-indigo-50/50'}`}
+                                            >
+                                                <Check size={14} strokeWidth={3} className={selectedQuizzes.includes(quiz.id) ? 'scale-100' : 'scale-0'} />
+                                            </button>
                                         </div>
 
                                         {/* Details */}
                                         <div className="flex-1 min-w-0 flex flex-col gap-1.5 w-full">
                                             <div className="flex items-center justify-between md:hidden w-full mb-1">
-                                                <input type="checkbox" checked={selectedQuizzes.includes(quiz.id)} onChange={() => toggleSelectQuiz(quiz.id)} className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer" />
-                                                <div className={`px-2.5 py-1 rounded-md text-[0.65rem] font-bold uppercase tracking-wider ${quiz.status === 'published' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
-                                                    {quiz.status}
+                                                <button 
+                                                    onClick={() => toggleSelectQuiz(quiz.id)}
+                                                    className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all duration-200 ${selectedQuizzes.includes(quiz.id) ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-300 text-transparent'}`}
+                                                >
+                                                    <Check size={14} strokeWidth={3} className={selectedQuizzes.includes(quiz.id) ? 'scale-100' : 'scale-0'} />
+                                                </button>
+                                                <div className={`px-2.5 py-1 rounded-md text-[0.65rem] font-bold uppercase tracking-wider ${
+                                                    isQuizExpired(quiz) 
+                                                        ? 'bg-red-50 text-red-600 border border-red-100' 
+                                                        : isQuizActive(quiz)
+                                                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                                            : quiz.status === 'published'
+                                                                ? 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                                                : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                                }`}>
+                                                    {isQuizExpired(quiz) ? 'Expired' : isQuizActive(quiz) ? 'Active' : quiz.status}
                                                 </div>
                                             </div>
 
@@ -278,15 +458,25 @@ const MyQuizzesPage: React.FC = () => {
                                                 <span className="flex items-center gap-1.5"><FileText size={14} className="text-indigo-400" /> {quiz.category}</span>
                                                 <span className="flex items-center gap-1.5"><ListFilter size={14} /> {quiz.questionCount} Qs</span>
                                                 <span className="flex items-center gap-1.5"><Clock size={14} /> {quiz.timeLimit}m</span>
-                                                <span className="flex items-center gap-1.5 hidden lg:flex"><Calendar size={14} /> {quiz.createdAt}</span>
+                                                <span className="flex items-center gap-1.5 hidden lg:flex" title={`Created: ${new Date(quiz.createdAt).toLocaleString()}`}>
+                                                    <Calendar size={14} /> {new Date(quiz.createdAt).toLocaleDateString()} {new Date(quiz.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
                                             </div>
                                         </div>
 
                                         {/* Status Badge (Desktop) */}
                                         <div className="hidden md:flex w-32 justify-center shrink-0">
-                                            <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${quiz.status === 'published' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-500 border border-slate-200'}`}>
-                                                {quiz.status === 'published' ? <CheckCircle size={12} /> : <Clock size={12} />}
-                                                {quiz.status}
+                                            <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                                                isQuizExpired(quiz) 
+                                                    ? 'bg-red-50 text-red-600 border border-red-100' 
+                                                    : isQuizActive(quiz)
+                                                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                                        : quiz.status === 'published'
+                                                            ? 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                                            : 'bg-slate-50 text-slate-500 border border-slate-200'
+                                            }`}>
+                                                {isQuizExpired(quiz) ? <AlertCircle size={12} /> : isQuizActive(quiz) ? <CheckCircle size={12} /> : <Clock size={12} />}
+                                                {isQuizExpired(quiz) ? 'Expired' : isQuizActive(quiz) ? 'Active' : quiz.status}
                                             </div>
                                         </div>
 
@@ -331,7 +521,23 @@ const MyQuizzesPage: React.FC = () => {
                                             >
                                                 Results
                                             </button>
-                                            <button className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-sm rounded-xl transition-colors">
+                                            <button 
+                                                onClick={() => {
+                                                    if (isQuizActive(quiz)) {
+                                                        if (window.confirm("This quiz is currently active. Any changes you make will be reflected immediately and might affect students who are currently taking the quiz. Do you want to proceed?")) {
+                                                            navigate(`/create-quiz?edit=${quiz.id}`);
+                                                        }
+                                                    } else {
+                                                        navigate(`/create-quiz?edit=${quiz.id}`);
+                                                    }
+                                                }}
+                                                className={`px-4 py-2 border font-bold text-sm rounded-xl transition-all ${
+                                                    isQuizActive(quiz) 
+                                                    ? 'border-amber-200 text-amber-600 hover:bg-amber-50 hover:border-amber-300' 
+                                                    : 'border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-indigo-200 hover:text-indigo-600'
+                                                }`}
+                                                title={isQuizActive(quiz) ? "Edit Active Quiz" : "Edit Quiz"}
+                                            >
                                                 Edit
                                             </button>
                                             <div className="relative">
@@ -345,7 +551,7 @@ const MyQuizzesPage: React.FC = () => {
                                                         <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2"><Share2 size={15} /> Share Link</button>
                                                         <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2"><Eye size={15} /> Preview</button>
                                                         <div className="h-px bg-slate-100 my-1"></div>
-                                                        <button className="w-full text-left px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2" onClick={() => handleDeleteQuiz(quiz.id)}><Trash2 size={15} /> Delete Quiz</button>
+                                                        <button className="w-full text-left px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2" onClick={() => handleDeleteQuiz(quiz)}><Trash2 size={15} /> Delete Quiz</button>
                                                     </div>
                                                 )}
                                             </div>
@@ -368,8 +574,11 @@ const MyQuizzesPage: React.FC = () => {
                                         Clear Filters
                                     </button>
                                 ) : (
-                                    <button className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-md hover:shadow-lg transition-all">
-                                        <Plus size={18} /> Create New Quiz
+                                    <button 
+                                        onClick={() => navigate('/create-quiz')}
+                                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
+                                    >
+                                        <Plus size={18} strokeWidth={3} /> Create Your First Quiz
                                     </button>
                                 )}
                             </div>
@@ -377,14 +586,21 @@ const MyQuizzesPage: React.FC = () => {
                     </>
                 ) : (
                     <div className="flex flex-col gap-4 animate-in fade-in">
-                        <div className="hidden md:flex items-center px-6 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                            <div className="flex-1 min-w-0">Quiz Details</div>
-                            <div className="w-32 text-center">Score</div>
-                            <div className="w-32 text-center">Status</div>
-                            <div className="w-48 text-right pr-12">Actions</div>
-                        </div>
+                        {isResultsLoading ? (
+                            <div className="flex flex-col items-center justify-center py-20">
+                                <Loader2 className="animate-spin text-indigo-600 mb-4" size={40} />
+                                <p className="text-slate-500 font-medium">Loading your results...</p>
+                            </div>
+                        ) : attemptedQuizzes.length > 0 ? (
+                            <>
+                                <div className="hidden md:flex items-center px-6 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                    <div className="flex-1 min-w-0">Quiz Details</div>
+                                    <div className="w-32 text-center">Score</div>
+                                    <div className="w-32 text-center">Status</div>
+                                    <div className="w-48 text-right pr-12">Actions</div>
+                                </div>
 
-                        {mockAttemptedQuizzes.map(quiz => (
+                                {attemptedQuizzes.map(quiz => (
                             <div key={quiz.id} className="bg-white rounded-[20px] border border-[#e2e8f0] p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center gap-4 sm:gap-6 hover:border-indigo-200 hover:shadow-md transition-all duration-200">
                                 <div className="flex-1 min-w-0 flex flex-col gap-1.5 w-full">
                                     <div className="flex items-center justify-between md:hidden w-full mb-1">
@@ -432,10 +648,88 @@ const MyQuizzesPage: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
-                        ))}
+                                ))}
+                            </>
+                        ) : (
+                            /* Empty State for Results */
+                            <div className="bg-white rounded-[24px] border border-dashed border-slate-300 p-12 flex flex-col items-center justify-center text-center">
+                                <div className="w-20 h-20 bg-emerald-50 text-emerald-300 rounded-full flex items-center justify-center mb-5 line-dashed">
+                                    <BarChart2 size={40} />
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-800 mb-2">No results yet</h3>
+                                <p className="text-slate-500 mb-6 max-w-sm">
+                                    You haven't attempted any quizzes yet. Start learning today!
+                                </p>
+                                <button onClick={() => navigate('/dashboard')} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors">
+                                    Browse Quizzes
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
+            {/* Delete Confirmation Modal */}
+            {isDeleteModalOpen && (quizToDelete || isBulkDelete) && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-md rounded-[28px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-8">
+                            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                                <Trash2 size={32} />
+                            </div>
+                            
+                            <h3 className="text-2xl font-black text-slate-800 text-center mb-2">
+                                {isBulkDelete ? `Delete ${selectedQuizzes.length} Quizzes?` : 'Delete Quiz?'}
+                            </h3>
+                            <p className="text-slate-500 text-center mb-8 leading-relaxed">
+                                {isBulkDelete ? (
+                                    <>This will permanently remove <span className="font-bold text-slate-800">{selectedQuizzes.length} selected quizzes</span> and all their associated data. This cannot be undone.</>
+                                ) : (
+                                    <>This action is <span className="text-red-600 font-bold italic">permanent</span>. All data, responses, and links for <span className="font-bold text-slate-800">"{quizToDelete?.title}"</span> will be gone forever.</>
+                                )}
+                            </p>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest block ml-1">
+                                        Type <span className="text-red-500 font-black">{isBulkDelete ? `DELETE ${selectedQuizzes.length} QUIZZES` : quizToDelete?.title.toUpperCase()}</span> to confirm
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder={isBulkDelete ? `DELETE ${selectedQuizzes.length} QUIZZES` : quizToDelete?.title.toUpperCase()}
+                                        value={deleteConfirmInput}
+                                        onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 outline-hidden focus:border-red-400 focus:bg-white transition-all uppercase placeholder:opacity-30"
+                                    />
+                                </div>
+
+                                <div className="flex gap-3 pt-2">
+                                    <button
+                                        onClick={() => { setIsDeleteModalOpen(false); setIsBulkDelete(false); }}
+                                        className="flex-1 px-6 py-4 border-2 border-slate-100 text-slate-500 font-bold rounded-2xl hover:bg-slate-50 transition-all text-sm"
+                                        disabled={isDeleting}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={confirmDelete}
+                                        disabled={deleteConfirmInput !== (isBulkDelete ? `DELETE ${selectedQuizzes.length} QUIZZES` : quizToDelete?.title.toUpperCase()) || isDeleting}
+                                        className="flex-1 px-6 py-4 bg-red-600 text-white font-bold rounded-2xl shadow-lg shadow-red-200 hover:bg-red-700 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2 text-sm"
+                                    >
+                                        {isDeleting ? (
+                                            <>
+                                                <Loader2 size={18} className="animate-spin" />
+                                                Deleting...
+                                            </>
+                                        ) : (
+                                            'Delete Forever'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </DashboardLayout >
     );
 };

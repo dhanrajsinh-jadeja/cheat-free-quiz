@@ -23,7 +23,14 @@
         "noFallthroughCasesInSwitch": true
     },
     "include": [
-        "src"
+        "src",
+        "middleware",
+        "models",
+        "routes",
+        "controller",
+        "utils",
+        "server.ts",
+        "rate-limit-mongodb.d.ts"
     ],
     "references": [
         {

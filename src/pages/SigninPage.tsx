@@ -62,7 +62,7 @@ const SignInPage: React.FC = () => {
                 <div className="flex flex-col gap-2">
                     <div className="flex justify-between items-center">
                         <label className="text-[0.95rem] font-medium text-text-white">Password</label>
-                        <a href="#" className="text-[0.85rem] text-primary hover:underline">Forgot your password?</a>
+                        <Link to="/forgot-password" className="text-[0.85rem] text-primary hover:underline">Forgot your password?</Link>
                     </div>
                     <div className="relative">
                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted transition-colors group-focus-within:text-primary" size={20} />

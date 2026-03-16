@@ -215,10 +215,10 @@ const MyQuizzesPage: React.FC = () => {
 
     const confirmDelete = async () => {
         const expectedConfirm = isBulkDelete 
-            ? `DELETE ${selectedQuizzes.length} QUIZZES` 
-            : quizToDelete?.title.toUpperCase();
+            ? `delete ${selectedQuizzes.length} quizzes` 
+            : quizToDelete?.title.toLowerCase();
 
-        if (deleteConfirmInput !== expectedConfirm) return;
+        if (deleteConfirmInput.toLowerCase() !== expectedConfirm) return;
 
         setIsDeleting(true);
         try {
@@ -691,14 +691,14 @@ const MyQuizzesPage: React.FC = () => {
                             <div className="space-y-4">
                                 <div className="space-y-2">
                                     <label className="text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest block ml-1">
-                                        Type <span className="text-red-500 font-black">{isBulkDelete ? `DELETE ${selectedQuizzes.length} QUIZZES` : quizToDelete?.title.toUpperCase()}</span> to confirm
+                                        Type <span className="text-red-500 font-black">{isBulkDelete ? `delete ${selectedQuizzes.length} quizzes` : quizToDelete?.title.toLowerCase()}</span> to confirm
                                     </label>
                                     <input
                                         type="text"
-                                        placeholder={isBulkDelete ? `DELETE ${selectedQuizzes.length} QUIZZES` : quizToDelete?.title.toUpperCase()}
+                                        placeholder={isBulkDelete ? `delete ${selectedQuizzes.length} quizzes` : quizToDelete?.title.toLowerCase()}
                                         value={deleteConfirmInput}
                                         onChange={(e) => setDeleteConfirmInput(e.target.value)}
-                                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 outline-hidden focus:border-red-400 focus:bg-white transition-all uppercase placeholder:opacity-30"
+                                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 outline-hidden focus:border-red-400 focus:bg-white transition-all placeholder:opacity-30"
                                     />
                                 </div>
 
@@ -712,7 +712,7 @@ const MyQuizzesPage: React.FC = () => {
                                     </button>
                                     <button
                                         onClick={confirmDelete}
-                                        disabled={deleteConfirmInput !== (isBulkDelete ? `DELETE ${selectedQuizzes.length} QUIZZES` : quizToDelete?.title.toUpperCase()) || isDeleting}
+                                        disabled={deleteConfirmInput.toLowerCase() !== (isBulkDelete ? `delete ${selectedQuizzes.length} quizzes` : quizToDelete?.title.toLowerCase()) || isDeleting}
                                         className="flex-1 px-6 py-4 bg-red-600 text-white font-bold rounded-2xl shadow-lg shadow-red-200 hover:bg-red-700 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2 text-sm"
                                     >
                                         {isDeleting ? (

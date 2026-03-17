@@ -30,7 +30,7 @@ export const quizService = {
     /**
      * Get a specific quiz by ID
      */
-    getQuiz: async (id: string): Promise<any> => {
+    async getQuiz(id: string): Promise<any> {
         const response = await fetch(`${API_BASE_URL}/quiz/${id}`, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
@@ -48,7 +48,7 @@ export const quizService = {
     /**
      * Create a new quiz
      */
-    createQuiz: async (quizData: any): Promise<any> => {
+    async createQuiz(quizData: any): Promise<any> {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/quiz`, {
             method: 'POST',
@@ -71,7 +71,7 @@ export const quizService = {
     /**
      * Publish a quiz
      */
-    publishQuiz: async (id: string, startDate?: Date, endDate?: Date): Promise<any> => {
+    async publishQuiz(id: string, startDate?: Date, endDate?: Date): Promise<any> {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/quiz/${id}/publish`, {
             method: 'POST',
@@ -94,7 +94,7 @@ export const quizService = {
     /**
      * Get dashboard statistics for the logged-in user
      */
-    getUserStats: async (): Promise<UserStats> => {
+    async getUserStats(): Promise<UserStats> {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/quiz/stats/user`, {
             method: 'GET',
@@ -116,7 +116,7 @@ export const quizService = {
     /**
      * Get all quizzes created by the logged-in user
      */
-    getMyQuizzes: async (): Promise<any[]> => {
+    async getMyQuizzes(): Promise<any[]> {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/quiz/my/all`, {
             method: 'GET',
@@ -138,7 +138,7 @@ export const quizService = {
     /**
      * Delete a quiz
      */
-    deleteQuiz: async (id: string): Promise<any> => {
+    async deleteQuiz(id: string): Promise<any> {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/quiz/${id}`, {
             method: 'DELETE',
@@ -160,7 +160,7 @@ export const quizService = {
     /**
      * Bulk delete quizzes
      */
-    deleteQuizzesBatch: async (ids: string[]): Promise<any> => {
+    async deleteQuizzesBatch(ids: string[]): Promise<any> {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/quiz/delete-batch`, {
             method: 'POST',
@@ -183,7 +183,7 @@ export const quizService = {
     /**
      * Update an existing quiz
      */
-    updateQuiz: async (id: string, quizData: any): Promise<any> => {
+    async updateQuiz(id: string, quizData: any): Promise<any> {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/quiz/${id}`, {
             method: 'PATCH',
@@ -204,9 +204,32 @@ export const quizService = {
     },
 
     /**
+     * Submit a quiz attempt
+     */
+    async submitQuiz(id: string, answers: any[], proctoringViolations: number, startTime: string): Promise<any> {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/quiz/${id}/submit`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ answers, proctoringViolations, startTime }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || 'Failed to submit quiz');
+        }
+
+        return result;
+    },
+
+    /**
      * Get attempt status for a quiz
      */
-    getAttemptStatus: async (id: string): Promise<{ attemptCount: number, maxAttempts: number, canAttempt: boolean }> => {
+    async getAttemptStatus(id: string): Promise<{ attemptCount: number, maxAttempts: number, canAttempt: boolean }> {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/quiz/${id}/attempt-status`, {
             method: 'GET',
@@ -223,5 +246,88 @@ export const quizService = {
         }
 
         return result;
+    },
+
+    /**
+     * Get analytics for a specific quiz (Creator only)
+     */
+    async getQuizAnalytics(id: string): Promise<any> {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/quiz/${id}/analytics`, {
+            method: 'GET',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+        });
+
+        if (!response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('text/html')) {
+                throw new Error(`Server returned HTML instead of JSON. This usually means a 404 or routing error. Status: ${response.status}`);
+            }
+            const result = await response.json().catch(() => ({ message: 'Failed to parse error response' }));
+            throw new Error(result.message || `Failed to fetch analytics (Status: ${response.status})`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get detailed information for a specific attempt
+     */
+    async getAttemptDetails(attemptId: string): Promise<any> {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/quiz/attempt/${attemptId}`, {
+            method: 'GET',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || 'Failed to fetch attempt details');
+        }
+
+        return result;
+    },
+
+    /**
+     * Export quiz responses as CSV
+     * The backend generates the full CSV string and sends it as a text/csv response.
+     * The frontend receives it as a Blob and triggers a browser download.
+     */
+    async exportQuizResponses(id: string): Promise<{ blob: Blob; filename: string }> {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/quiz/${id}/export`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+        });
+
+        if (!response.ok) {
+            // Try to read the error message as text (handles both JSON and HTML responses)
+            const errorText = await response.text().catch(() => '');
+            let message = `Export failed with status ${response.status}`;
+            try {
+                const errorJson = JSON.parse(errorText);
+                message = errorJson.message || message;
+            } catch { /* response was plain text or HTML */ }
+            throw new Error(message);
+        }
+
+        const blob = await response.blob();
+        // Extract filename from Content-Disposition header if available
+        const disposition = response.headers.get('content-disposition');
+        let filename = 'quiz_responses.csv';
+        if (disposition) {
+            const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+            if (match && match[1]) filename = match[1].replace(/['"/]/g, '');
+        }
+        return { blob, filename };
     }
 };

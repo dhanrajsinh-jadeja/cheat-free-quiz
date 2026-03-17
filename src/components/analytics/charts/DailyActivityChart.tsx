@@ -1,14 +1,17 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { dailyActivityData } from '../mockData';
 
-const DailyActivityChart: React.FC = () => {
+interface DailyActivityChartProps {
+    data: { date: string; attempts: number }[];
+}
+
+const DailyActivityChart: React.FC<DailyActivityChartProps> = ({ data }) => {
     return (
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[300px]">
-            <h3 className="text-sm font-bold text-slate-700 mb-4 px-2">13. Daily Attempt Activity</h3>
+            <h3 className="text-sm font-bold text-slate-700 mb-4 px-2">Daily Attempt Activity</h3>
             <div className="flex-1 min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailyActivityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <defs>
                             <linearGradient id="colorAttempts" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.8} />

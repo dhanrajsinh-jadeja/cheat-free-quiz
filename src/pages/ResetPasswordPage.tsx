@@ -88,8 +88,10 @@ const ResetPasswordPage: React.FC = () => {
                     <Input
                         icon={Lock}
                         type="password"
+                        name="password"
                         placeholder="••••••••"
                         required
+                        autoComplete="new-password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                     />
@@ -100,8 +102,10 @@ const ResetPasswordPage: React.FC = () => {
                     <Input
                         icon={Lock}
                         type="password"
+                        name="confirm-password"
                         placeholder="••••••••"
                         required
+                        autoComplete="new-password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                     />

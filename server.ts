@@ -1,9 +1,12 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
+import helmet from 'helmet';
+import compression from 'compression';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes';
 import quizRoutes from './routes/quizRoutes';
+import errorMiddleware from './middleware/errorMiddleware';
 
 // Load environment variables from the .env file into process.env
 dotenv.config();
@@ -18,8 +21,26 @@ const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quiz-app';
 
 // --- Middleware ---
-// Enable CORS (Cross-Origin Resource Sharing) so the frontend can make requests to this API
-app.use(cors());
+
+// Use Helmet for security headers
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// Use compression for Gzip/Brotli response compression
+app.use(compression());
+
+// Trust proxy is required for express-rate-limit to correctly identify IPs
+app.set('trust proxy', 1);
+
+// Enable CORS and expose Content-Disposition so the frontend can read the CSV filename
+const corsOptions = {
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    exposedHeaders: ['Content-Disposition'],
+    credentials: true
+};
+app.use(cors(corsOptions));
+
 // Parse incoming JSON payloads in the request body
 app.use(express.json());
 
@@ -34,6 +55,10 @@ app.use('/api/quiz', quizRoutes);
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// --- Error Handling ---
+// Global error middleware should be the last middleware
+app.use(errorMiddleware);
 
 // --- Database Connection & Server Start ---
 // Attempt to connect to MongoDB using Mongoose

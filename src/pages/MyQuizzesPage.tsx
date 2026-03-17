@@ -62,39 +62,28 @@ const MyQuizzesPage: React.FC = () => {
         const fetchQuizzes = async () => {
             setIsLoading(true);
             try {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    setIsLoading(false);
-                    return;
-                }
-                const response = await fetch('http://localhost:5000/api/quiz/my/all', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    const formattedQuizzes: Quiz[] = data.map((q: any) => ({
-                        id: q._id,
-                        title: q.title,
-                        category: q.category || 'Uncategorized',
-                        questionCount: q.questions?.length || 0,
-                        timeLimit: q.timeLimit || 0,
-                        marks: q.totalMarks || 0,
-                        status: q.isPublished ? 'published' : 'draft',
-                        createdAt: q.createdAt, // Store raw ISO for sorting
-                        publishedAt: q.publishedAt, // Store raw ISO for sorting
-                        attempts: 0, // To be implemented on backend
-                        avgScore: 0, // To be implemented on backend
-                        tags: q.tags || [],
-                        startDate: q.startDate,
-                        endDate: q.endDate,
-                    }));
-                    setQuizzes(formattedQuizzes);
-                }
+                const data = await quizService.getMyQuizzes();
+                const formattedQuizzes: Quiz[] = data.map((q: any) => ({
+                    id: q._id,
+                    title: q.title,
+                    category: q.category || 'Uncategorized',
+                    questionCount: q.questions?.length || 0,
+                    timeLimit: q.timeLimit || 0,
+                    marks: q.totalMarks || 0,
+                    status: q.isPublished ? 'published' : 'draft',
+                    createdAt: q.createdAt,
+                    publishedAt: q.publishedAt,
+                    attempts: q.attempts || 0,
+                    avgScore: q.avgScore || 0,
+                    tags: q.tags || [],
+                    startDate: q.startDate,
+                    endDate: q.endDate,
+                }));
+
+                setQuizzes(formattedQuizzes);
             } catch (error) {
-                console.error("Error fetching quizzes:", error);
+                // Error handled silently
+                showToast("Failed to load quizzes", "error");
             } finally {
                 setIsLoading(false);
             }
@@ -128,12 +117,12 @@ const MyQuizzesPage: React.FC = () => {
                         totalMarks: a.totalMarks,
                         timeTaken: 0, // Not provided by this endpoint currently
                         submittedAt: new Date(a.date).toLocaleString(),
-                        status: (a.score / a.totalMarks) >= 0.4 ? 'passed' : 'failed' // Example logic
+                        status: a.isPassed ? 'passed' : 'failed'
                     }));
                     setAttemptedQuizzes(formattedResults);
                 }
             } catch (error) {
-                console.error("Error fetching results:", error);
+                // Error handled silently
             } finally {
                 setIsResultsLoading(false);
             }
@@ -226,21 +215,61 @@ const MyQuizzesPage: React.FC = () => {
                 await quizService.deleteQuizzesBatch(selectedQuizzes);
                 setQuizzes(quizzes.filter(q => !selectedQuizzes.includes(q.id)));
                 setSelectedQuizzes([]);
+                showToast(`Deleted ${selectedQuizzes.length} quizzes`, "success");
             } else if (quizToDelete) {
                 await quizService.deleteQuiz(quizToDelete.id);
                 setQuizzes(quizzes.filter(q => q.id !== quizToDelete.id));
                 setSelectedQuizzes(prev => prev.filter(qId => qId !== quizToDelete.id));
+                showToast("Quiz deleted successfully", "success");
             }
             
             setIsDeleteModalOpen(false);
             setQuizToDelete(null);
             setIsBulkDelete(false);
         } catch (error) {
-            console.error("Error deleting quiz(zes):", error);
-            alert("Failed to delete. Please try again.");
+            // Error handled silently
+            showToast("Failed to delete", "error");
         } finally {
             setIsDeleting(false);
         }
+    };
+
+    const handlePublishQuiz = async (id: string) => {
+        try {
+            await quizService.publishQuiz(id);
+            setQuizzes(prev => prev.map(q => q.id === id ? { ...q, status: 'published' } : q));
+            showToast("Quiz published successfully!", "success");
+        } catch (error) {
+            // Error handled silently
+            showToast("Failed to publish quiz", "error");
+        }
+    };
+
+    const handleShareLink = (id: string) => {
+        const link = `${window.location.origin}/quiz-rules/${id}`;
+        navigator.clipboard.writeText(link).then(() => {
+            showToast("Link copied to clipboard!", "success");
+        }).catch(_err => {
+            // Error handled silently
+            showToast("Failed to copy link", "error");
+        });
+    };
+
+    const handleEditQuiz = (quiz: Quiz) => {
+        if (isQuizActive(quiz)) {
+            if (window.confirm("This quiz is currently active. Any changes you make will be reflected immediately and might affect students who are currently taking the quiz. Do you want to proceed?")) {
+                navigate(`/create-quiz?edit=${quiz.id}`);
+            }
+        } else {
+            navigate(`/create-quiz?edit=${quiz.id}`);
+        }
+    };
+
+    // Toast State
+    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
     };
 
     return (
@@ -509,28 +538,53 @@ const MyQuizzesPage: React.FC = () => {
 
                                             <div className="flex gap-2">
                                                 <button onClick={() => navigate(`/quiz/${quiz.id}/responses`)} className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors" title="View Responses"><BarChart2 size={18} /></button>
-                                                <button className="p-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"><MoreVertical size={18} /></button>
+                                                <div className="relative">
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === quiz.id ? null : quiz.id); }}
+                                                        className="p-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                                                    >
+                                                        <MoreVertical size={18} />
+                                                    </button>
+                                                    {activeDropdown === quiz.id && (
+                                                        <div className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-30 animate-in fade-in slide-in-from-bottom-2 zoom-in-95">
+                                                            <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2" onClick={() => handleEditQuiz(quiz)}><Plus size={15} className="rotate-45" /> Edit Quiz</button>
+                                                            <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2" onClick={() => navigate(`/create-quiz?edit=${quiz.id}&duplicate=true`)}><Copy size={15} /> Duplicate Quiz</button>
+                                                            {quiz.status === 'published' && (
+                                                                <button 
+                                                                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2"
+                                                                    onClick={() => handleShareLink(quiz.id)}
+                                                                >
+                                                                    <Share2 size={15} /> Share Link
+                                                                </button>
+                                                            )}
+                                                            <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2" onClick={() => navigate(`/quiz-rules/${quiz.id}`)}><Eye size={15} /> Preview</button>
+                                                            <div className="h-px bg-slate-100 my-1"></div>
+                                                            <button className="w-full text-left px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2" onClick={() => handleDeleteQuiz(quiz)}><Trash2 size={15} /> Delete Quiz</button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
 
                                         {/* Desktop Actions */}
                                         <div className="hidden md:flex items-center justify-end gap-2 w-48 shrink-0 relative">
-                                            <button
-                                                onClick={() => navigate(`/quiz/${quiz.id}/responses`)}
-                                                className="px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 font-bold text-sm rounded-xl transition-colors"
-                                            >
-                                                Results
-                                            </button>
+                                            {quiz.status === 'draft' ? (
+                                                <button
+                                                    onClick={() => handlePublishQuiz(quiz.id)}
+                                                    className="px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 font-bold text-sm rounded-xl transition-colors"
+                                                >
+                                                    Publish
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => navigate(`/quiz/${quiz.id}/responses`)}
+                                                    className="px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 font-bold text-sm rounded-xl transition-colors"
+                                                >
+                                                    Results
+                                                </button>
+                                            )}
                                             <button 
-                                                onClick={() => {
-                                                    if (isQuizActive(quiz)) {
-                                                        if (window.confirm("This quiz is currently active. Any changes you make will be reflected immediately and might affect students who are currently taking the quiz. Do you want to proceed?")) {
-                                                            navigate(`/create-quiz?edit=${quiz.id}`);
-                                                        }
-                                                    } else {
-                                                        navigate(`/create-quiz?edit=${quiz.id}`);
-                                                    }
-                                                }}
+                                                onClick={() => handleEditQuiz(quiz)}
                                                 className={`px-4 py-2 border font-bold text-sm rounded-xl transition-all ${
                                                     isQuizActive(quiz) 
                                                     ? 'border-amber-200 text-amber-600 hover:bg-amber-50 hover:border-amber-300' 
@@ -547,9 +601,16 @@ const MyQuizzesPage: React.FC = () => {
                                                 {/* Dropdown menu */}
                                                 {activeDropdown === quiz.id && (
                                                     <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-30 animate-in fade-in zoom-in-95">
-                                                        <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2"><Copy size={15} /> Duplicate Quiz</button>
-                                                        <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2"><Share2 size={15} /> Share Link</button>
-                                                        <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2"><Eye size={15} /> Preview</button>
+                                                        <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2" onClick={() => navigate(`/create-quiz?edit=${quiz.id}&duplicate=true`)}><Copy size={15} /> Duplicate Quiz</button>
+                                                        {quiz.status === 'published' && (
+                                                            <button 
+                                                                className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2"
+                                                                onClick={() => handleShareLink(quiz.id)}
+                                                            >
+                                                                <Share2 size={15} /> Share Link
+                                                            </button>
+                                                        )}
+                                                        <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2" onClick={() => navigate(`/quiz-rules/${quiz.id}`)}><Eye size={15} /> Preview</button>
                                                         <div className="h-px bg-slate-100 my-1"></div>
                                                         <button className="w-full text-left px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2" onClick={() => handleDeleteQuiz(quiz)}><Trash2 size={15} /> Delete Quiz</button>
                                                     </div>
@@ -636,11 +697,26 @@ const MyQuizzesPage: React.FC = () => {
                                         <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Score</p>
                                         <p className={`font-bold text-sm ${quiz.score >= 80 ? 'text-emerald-600' : quiz.score >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{quiz.score} / {quiz.totalMarks}</p>
                                     </div>
-                                    <button className="p-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"><MoreVertical size={18} /></button>
+                                    <div className="relative">
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === quiz.id ? null : quiz.id); }}
+                                            className="p-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                                        >
+                                            <MoreVertical size={18} />
+                                        </button>
+                                        {activeDropdown === quiz.id && (
+                                            <div className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-30 animate-in fade-in slide-in-from-bottom-2 zoom-in-95">
+                                                <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2" onClick={() => navigate(`/quiz/result/${quiz.id}`)}><Eye size={15} /> View Details</button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className="hidden md:flex items-center justify-end gap-2 w-48 shrink-0">
-                                    <button className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-sm rounded-xl transition-colors">
+                                    <button 
+                                        onClick={() => navigate(`/quiz/result/${quiz.id}`)}
+                                        className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-sm rounded-xl transition-colors"
+                                    >
                                         View Details
                                     </button>
                                     <button className="p-2 border border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
@@ -727,6 +803,20 @@ const MyQuizzesPage: React.FC = () => {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Toast Notification */}
+            {toast && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[110] animate-in slide-in-from-bottom-4 duration-300">
+                    <div className={`px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border ${
+                        toast.type === 'success' 
+                        ? 'bg-emerald-600 border-emerald-500 text-white' 
+                        : 'bg-red-600 border-red-500 text-white'
+                    }`}>
+                        {toast.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                        <p className="font-bold text-sm tracking-wide">{toast.message}</p>
                     </div>
                 </div>
             )}

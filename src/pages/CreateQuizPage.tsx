@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
     Plus, Trash2, HelpCircle, CheckCircle, Clock, Layout, Copy, X, ExternalLink, Loader2,
     ChevronDown, ChevronRight, ArrowUp, ArrowDown, Eye, Save, Shield, Shuffle,
@@ -29,6 +29,7 @@ interface Question {
 
 const CreateQuizPage: React.FC = () => {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const editQuizId = searchParams.get('edit');
     const isEditMode = !!editQuizId;
 
@@ -53,7 +54,11 @@ const CreateQuizPage: React.FC = () => {
     const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
     const [expiresAt, setExpiresAt] = useState<string | null>(null);
     const [copySuccess, setCopySuccess] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+    };
     const [activeQuestionId, setActiveQuestionId] = useState<string>('1');
     const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
     const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -114,7 +119,7 @@ const CreateQuizPage: React.FC = () => {
                     })));
                 }
             } catch (err: any) {
-                setError(err.message || 'Failed to load quiz for editing');
+                showToast(err.message || 'Failed to load quiz for editing', 'error');
             } finally {
                 setLoading(false);
             }
@@ -283,34 +288,46 @@ const CreateQuizPage: React.FC = () => {
                     }
                 }
                 if (newQuestions.length > 0) setQuestions(prev => [...prev, ...newQuestions]);
-                else setError('No valid questions found in CSV. Format: Type,Question,Opt1,Opt2,Opt3,Opt4,Correct(1-4),Marks');
-            } catch { setError('Failed to parse CSV file.'); }
+                else showToast('No valid questions found in CSV. Format: Type,Question,Opt1,Opt2,Opt3,Opt4,Correct(1-4),Marks', 'error');
+            } catch { showToast('Failed to parse CSV file.', 'error'); }
             e.target.value = '';
         };
         reader.readAsText(file);
     };
 
     const handlePublish = async () => {
-        setLoading(true); setError(null);
+        setLoading(true);
         try {
             // Validation
-            if (!quizInfo.title.trim()) throw new Error('Quiz title is required');
+            if (!quizInfo.title.trim()) {
+                showToast('Quiz title is required', 'error');
+                setLoading(false);
+                return;
+            }
             
             for (let i = 0; i < questions.length; i++) {
                 const q = questions[i];
                 const qNum = i + 1;
                 
-                if (!q.text.trim()) throw new Error(`Question ${qNum} text is required`);
+                if (!q.text.trim()) {
+                    showToast(`Question ${qNum} text is required`, 'error');
+                    setLoading(false);
+                    return;
+                }
 
                 if (['mcq', 'multi-mcq', 'tf'].includes(q.type)) {
                     if (q.correctAnswers.length === 0) {
-                        throw new Error(`Question ${qNum} (${q.type.toUpperCase()}) must have at least one correct answer selected`);
+                        showToast(`Question ${qNum} (${q.type.toUpperCase()}) must have at least one correct answer selected`, 'error');
+                        setLoading(false);
+                        return;
                     }
                     
                     if (['mcq', 'multi-mcq'].includes(q.type)) {
                         const filledOptions = q.options.filter(opt => opt.trim() !== '');
                         if (filledOptions.length < 2) {
-                            throw new Error(`Question ${qNum} (${q.type.toUpperCase()}) must have at least two options filled`);
+                            showToast(`Question ${qNum} (${q.type.toUpperCase()}) must have at least two options filled`, 'error');
+                            setLoading(false);
+                            return;
                         }
                     }
                 }
@@ -348,8 +365,9 @@ const CreateQuizPage: React.FC = () => {
             setPublishedUrl(publishResult.quizLink);
             setExpiresAt(new Date(publishResult.expiresAt).toLocaleString());
             setIsPublishing(true);
+            showToast('Quiz published successfully!', 'success');
         } catch (err: any) {
-            setError(err.message || 'Failed to publish quiz');
+            showToast(err.message || 'Failed to publish quiz', 'error');
         } finally { setLoading(false); }
     };
 
@@ -420,17 +438,15 @@ const CreateQuizPage: React.FC = () => {
                     </button>
                 </div>
 
-                {error && (
-                    <div className="mb-6 bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl text-sm font-medium flex items-center gap-2">
-                        <AlertCircle size={16} /> {error}
-                    </div>
-                )}
 
                 {/* Publish Modal */}
                 {isPublishing && (
                     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-[24px] w-full max-w-[500px] p-8 shadow-2xl relative">
-                            <button onClick={() => setIsPublishing(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors"><X size={24} /></button>
+                        <div className="bg-white rounded-[32px] w-full max-w-[500px] p-10 shadow-3xl relative border border-slate-100 overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500"></div>
+                            <button onClick={() => navigate('/my-quizzes')} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all group">
+                                <X size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+                            </button>
                             <div className="text-center mb-8">
                                 <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle size={32} /></div>
                                 <h2 className="text-2xl font-bold text-slate-800">{isEditMode ? 'Quiz Updated!' : 'Quiz Published!'}</h2>
@@ -452,7 +468,17 @@ const CreateQuizPage: React.FC = () => {
                                         </button>
                                     </div>
                                 </div>
-                                <a href={publishedUrl || '/'} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full py-4 text-indigo-600 font-bold hover:bg-indigo-50 rounded-xl transition-colors"><ExternalLink size={18} /> Preview Quiz</a>
+                                <div className="grid grid-cols-2 gap-3 mt-6">
+                                    <a href={publishedUrl || '/'} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 py-4 px-4 bg-slate-50 text-slate-700 font-bold hover:bg-slate-100 rounded-2xl transition-all border border-slate-200 text-sm">
+                                        <ExternalLink size={18} /> Preview
+                                    </a>
+                                    <button 
+                                        onClick={() => navigate('/my-quizzes')} 
+                                        className="flex items-center justify-center gap-2 py-4 px-4 bg-indigo-600 text-white font-bold hover:bg-indigo-700 rounded-2xl transition-all shadow-lg shadow-indigo-100 text-sm"
+                                    >
+                                        <Layout size={18} /> My Quizzes
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -887,6 +913,19 @@ const CreateQuizPage: React.FC = () => {
                     </div>
                 )}
             </div>
+            {/* Toast Notification */}
+            {toast && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[110] animate-in slide-in-from-bottom-4 duration-300">
+                    <div className={`px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border ${
+                        toast.type === 'success' 
+                        ? 'bg-emerald-600 border-emerald-500 text-white' 
+                        : 'bg-red-600 border-red-500 text-white'
+                    }`}>
+                        {toast.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                        <p className="font-bold text-sm tracking-wide">{toast.message}</p>
+                    </div>
+                </div>
+            )}
         </DashboardLayout>
     );
 };

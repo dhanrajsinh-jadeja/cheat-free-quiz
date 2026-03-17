@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Lock, Loader2 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 import Input from '../components/Input';
 import Button from '../components/Button';
@@ -9,26 +9,65 @@ import { GoogleLogin } from '@react-oauth/google';
 
 const SignInPage: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const from = (location.state as any)?.from?.pathname || '/profile';
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [blockedUntil, setBlockedUntil] = useState<number | null>(() => {
+        const saved = localStorage.getItem('signin_blocked_until');
+        return saved ? parseInt(saved, 10) : null;
+    });
+    const [remainingTime, setRemainingTime] = useState<number>(0);
+
     const [formData, setFormData] = useState({
         email: '',
         password: '',
     });
 
+    React.useEffect(() => {
+        if (!blockedUntil) return;
+
+        const interval = setInterval(() => {
+            const now = Date.now();
+            if (now >= blockedUntil) {
+                setBlockedUntil(null);
+                localStorage.removeItem('signin_blocked_until');
+                setRemainingTime(0);
+                clearInterval(interval);
+            } else {
+                setRemainingTime(Math.ceil((blockedUntil - now) / 1000));
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [blockedUntil]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (blockedUntil && Date.now() < blockedUntil) return;
+        
         setLoading(true);
         setError(null);
 
         try {
             await authService.login(formData);
-            navigate('/profile');
+            navigate(from, { replace: true });
         } catch (err: any) {
             setError(err.message || 'Invalid credentials');
+            if (err.status === 429) {
+                const blockTime = Date.now() + 30 * 60 * 1000; // 30 minutes
+                setBlockedUntil(blockTime);
+                localStorage.setItem('signin_blocked_until', blockTime.toString());
+            }
         } finally {
             setLoading(false);
         }
+    };
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
     return (
@@ -54,6 +93,7 @@ const SignInPage: React.FC = () => {
                         type="email"
                         placeholder="you@example.com"
                         required
+                        autoComplete="email"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     />
@@ -68,50 +108,62 @@ const SignInPage: React.FC = () => {
                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted transition-colors group-focus-within:text-primary" size={20} />
                         <input
                             type="password"
+                            name="password"
                             placeholder="••••••••"
                             className="w-full bg-input-bg border border-border-color rounded-lg py-4 pl-12 pr-4 text-text-white text-base outline-hidden transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-blue-500/20"
                             required
+                            autoComplete="current-password"
                             value={formData.password}
                             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         />
                     </div>
                 </div>
 
-                <Button type="submit" disabled={loading}>
-                    {loading ? <Loader2 className="animate-spin mx-auto" size={20} /> : 'Sign in'}
+                <Button type="submit" disabled={loading || (!!blockedUntil && remainingTime > 0)}>
+                    {loading ? (
+                        <Loader2 className="animate-spin mx-auto" size={20} />
+                    ) : (!!blockedUntil && remainingTime > 0) ? (
+                        `Blocked (${formatTime(remainingTime)})`
+                    ) : (
+                        'Sign in'
+                    )}
                 </Button>
 
-                <div className="relative flex items-center py-4">
-                    <div className="flex-grow border-t border-border-color"></div>
-                    <span className="flex-shrink mx-4 text-text-muted text-[0.85rem]">Or continue with</span>
-                    <div className="flex-grow border-t border-border-color"></div>
-                </div>
+                {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+                    <>
+                        <div className="relative flex items-center py-4">
+                            <div className="flex-grow border-t border-border-color"></div>
+                            <span className="flex-shrink mx-4 text-text-muted text-[0.85rem]">Or continue with</span>
+                            <div className="flex-grow border-t border-border-color"></div>
+                        </div>
 
-                <div className="flex justify-center w-full">
-                    <GoogleLogin
-                        onSuccess={async (credentialResponse) => {
-                            if (credentialResponse.credential) {
-                                try {
-                                    setLoading(true);
-                                    await authService.googleLogin(credentialResponse.credential);
-                                    navigate('/profile');
-                                } catch (err: any) {
-                                    setError(err.message || 'Google Login failed');
-                                } finally {
-                                    setLoading(false);
-                                }
-                            }
-                        }}
-                        onError={() => {
-                            setError('Google Login failed');
-                        }}
-                        useOneTap
-                        theme="filled_black"
-                        shape="pill"
-                        text="continue_with"
-                        width="100%"
-                    />
-                </div>
+                        <div className="flex justify-center w-full">
+                            <GoogleLogin
+                                onSuccess={async (credentialResponse) => {
+                                    if (credentialResponse.credential) {
+                                        try {
+                                            setLoading(true);
+                                            await authService.googleLogin(credentialResponse.credential);
+                                            navigate(from, { replace: true });
+                                        } catch (err: any) {
+                                            setError(err.message || 'Google Login failed');
+                                        } finally {
+                                            setLoading(false);
+                                        }
+                                    }
+                                }}
+                                onError={() => {
+                                    setError('Google Login failed');
+                                }}
+                                useOneTap
+                                theme="filled_black"
+                                shape="pill"
+                                text="continue_with"
+                                width="100%"
+                            />
+                        </div>
+                    </>
+                )}
             </form>
 
             <div className="text-center mt-12 text-text-muted text-[0.85rem] select-none">

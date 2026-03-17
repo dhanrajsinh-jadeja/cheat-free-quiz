@@ -34,7 +34,7 @@ const ProfilePage: React.FC = () => {
                     avatar: profileData.avatar || '',
                 });
             } catch (error) {
-                console.error('Failed to fetch profile or stats:', error);
+                // Error handled silently
             } finally {
                 setLoading(false);
             }

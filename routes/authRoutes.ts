@@ -1,19 +1,19 @@
 import { Router } from 'express';
 import { signUp, login, googleLogin, forgotPassword, resetPassword, getProfile } from '../controller/authController';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { forgotPasswordLimiter } from '../middleware/rateLimitMiddleware';
+import { forgotPasswordLimiter, signUpLimiter, signInLimiter, signUpEmailLimiter, signUpIPBlockCheck } from '../middleware/rateLimitMiddleware';
 
 const router = Router();
 
 // @route   POST /api/auth/signup
 // @desc    Register a new user with email and password
 // @access  Public
-router.post('/signup', signUp);
+router.post('/signup', signUpIPBlockCheck, signUpEmailLimiter, signUpLimiter, signUp);
 
 // @route   POST /api/auth/login
 // @desc    Authenticate user & get a JWT token
 // @access  Public
-router.post('/login', login);
+router.post('/login', signInLimiter, login);
 
 // @route   POST /api/auth/google
 // @desc    Authenticate with Google OAuth token

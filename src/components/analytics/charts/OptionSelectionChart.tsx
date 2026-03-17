@@ -1,14 +1,18 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { optionSelectionData } from '../mockData';
 
-const OptionSelectionChart: React.FC = () => {
+interface OptionSelectionChartProps {
+
+    data: any[];
+}
+
+const OptionSelectionChart: React.FC<OptionSelectionChartProps> = ({ data }) => {
     return (
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[300px]">
             <h3 className="text-sm font-bold text-slate-700 mb-2 px-2">7. Option Selection Analysis</h3>
             <div className="flex-1 min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={optionSelectionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                         <XAxis dataKey="question" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
@@ -27,5 +31,6 @@ const OptionSelectionChart: React.FC = () => {
         </div>
     );
 };
+
 
 export default OptionSelectionChart;

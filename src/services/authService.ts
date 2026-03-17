@@ -22,7 +22,9 @@ export const authService = {
         const result = await response.json();
 
         if (!response.ok) {
-            throw new Error(result.message || 'Signup failed');
+            const error = new Error(result.message || 'Signup failed') as any;
+            error.status = response.status;
+            throw error;
         }
 
         // Store token in localStorage
@@ -46,7 +48,9 @@ export const authService = {
         const result = await response.json();
 
         if (!response.ok) {
-            throw new Error(result.message || 'Login failed');
+            const error = new Error(result.message || 'Login failed') as any;
+            error.status = response.status;
+            throw error;
         }
 
         if (result.token) {
@@ -99,7 +103,9 @@ export const authService = {
         const result = await response.json();
 
         if (!response.ok) {
-            throw new Error(result.message || 'Failed to send reset email');
+            const error = new Error(result.message || 'Failed to send reset email') as any;
+            error.status = response.status;
+            throw error;
         }
 
         return result;

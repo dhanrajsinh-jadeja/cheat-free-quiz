@@ -1,10 +1,14 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import User from '../models/userModel';
+
 import { OAuth2Client } from 'google-auth-library';
 import crypto from 'crypto';
 import sendEmail from '../utils/sendEmail';
+
+
 
 
 // Initialize Google OAuth client with your specific Client ID
@@ -78,7 +82,7 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
             try {
                 await sendEmail(user.email, welcomeSubject, welcomeText, welcomeHtml);
             } catch (emailError) {
-                console.error('Failed to send welcome email to Google user:', emailError);
+                // Error handled silently
             }
         }
 
@@ -100,8 +104,10 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
                 createdAt: user.createdAt
             }
         });
+
+
     } catch (error) {
-        console.error('Google Auth Error:', error);
+        // Error handled silently
         res.status(500).json({ message: 'Error during Google authentication' });
     }
 };
@@ -111,9 +117,8 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
  * Takes user details, checks for existing accounts, hashes the password, and issues a JWT.
  */
 export const signUp = async (req: Request, res: Response): Promise<void> => {
+    const { fullName, email, password } = req.body;
     try {
-        const { fullName, email, password } = req.body;
-
         // 1. Basic Validation: ensure all required fields are present
         if (!fullName || !email || !password) {
             res.status(400).json({ message: 'All fields are required' });
@@ -123,12 +128,12 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
         // 2. Check if a user with this email address already holds an account
         const existingUser = await User.findOne({ email });
         if (existingUser) {
+
             res.status(400).json({ message: 'User with this email already exists' });
             return;
         }
 
         // 3. Hash the password using bcrypt and a salt of factor 10 for security
-        // Never store plain-text passwords in the DB!
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -143,33 +148,13 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
 
         // Send Welcome Email to new registered user
         const welcomeSubject = 'Welcome to Quiz App!';
-        const welcomeText = `Hi ${savedUser.fullName},\n\nWelcome to Quiz App! We're excited to have you on board. You can now create and take quizzes to test your knowledge.\n\nBest regards,\nThe Quiz App Team`;
-        const welcomeHtml = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-                <h2 style="color: #4F46E5; text-align: center;">Welcome to Quiz App!</h2>
-                <p>Hi <strong>${savedUser.fullName}</strong>,</p>
-                <p>We're absolutely thrilled to have you join our community!</p>
-                <div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                    <p style="margin: 0;">With Quiz App, you can:</p>
-                    <ul style="color: #374151;">
-                        <li>Create custom quizzes with ease</li>
-                        <li>Take challenging assessments</li>
-                        <li>Analyze your performance with detailed reports</li>
-                    </ul>
-                </div>
-                <p>Ready to get started? Head over to your dashboard and create your first quiz!</p>
-                <div style="text-align: center; margin-top: 30px;">
-                    <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Go to Dashboard</a>
-                </div>
-                <hr style="margin-top: 40px; border: 0; border-top: 1px solid #eee;" />
-                <p style="font-size: 12px; color: #6b7280; text-align: center;">Best regards,<br>The Quiz App Team</p>
-            </div>
-        `;
+        const welcomeText = `Hi ${savedUser.fullName},\n\nWelcome to Quiz App! We're excited to have you on board.`;
+        const welcomeHtml = `<div style="font-family: Arial, sans-serif; padding: 20px;"><h2>Welcome to Quiz App!</h2><p>Hi ${savedUser.fullName}, welcome to our community!</p></div>`;
 
         try {
             await sendEmail(savedUser.email, welcomeSubject, welcomeText, welcomeHtml);
         } catch (emailError) {
-            console.error('Failed to send welcome email to new user:', emailError);
+            // Error handled silently
         }
 
         // 5. Generate a JWT Token valid for 7 days
@@ -179,7 +164,7 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
             { expiresIn: '7d' }
         );
 
-        // 6. Return response to client containing token and masked user data (exclude hashed password)
+        // 6. Return response to client
         res.status(201).json({
             message: 'User registered successfully',
             token,
@@ -191,8 +176,9 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
                 createdAt: savedUser.createdAt,
             },
         });
+
+
     } catch (error: any) {
-        console.error('Signup Error:', error);
         res.status(500).json({ message: 'Server error during registration', error: error.message });
     }
 };
@@ -202,30 +188,27 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
  * Authenticates credentials, compares hashed passwords, and returns a JWT if valid.
  */
 export const login = async (req: Request, res: Response): Promise<void> => {
+    const { email, password } = req.body;
     try {
-        const { email, password } = req.body;
-
-        // Ensure both email and password are provided
         if (!email || !password) {
             res.status(400).json({ message: 'Email and password are required' });
             return;
         }
 
-        // Fetch user from database
         const user = await User.findOne({ email });
         if (!user) {
+
             res.status(400).json({ message: 'Invalid credentials!' });
             return;
         }
 
-        // Compare the plain text password from login attempt with the hashed password stored in DB
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
+
             res.status(400).json({ message: 'Invalid credentials!' });
             return;
         }
 
-        // If credentials match, sign a new JWT token valid for 7 days
         const token = jwt.sign(
             { id: user._id, email: user.email },
             JWT_SECRET,
@@ -243,67 +226,56 @@ export const login = async (req: Request, res: Response): Promise<void> => {
                 createdAt: user.createdAt,
             },
         });
+
+
     } catch (error: any) {
         res.status(500).json({ message: 'Server error during login' });
     }
 };
 
-
-
-
 /**
  * @route   POST /api/auth/forgot-password
  * @desc    Generate reset token and send email
- * @access  Public
  */
 export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+    const { email } = req.body;
     try {
-        const { email } = req.body;
-        const user = await User.findOne({ email });
+        const db = mongoose.connection.db;
+        if (db) {
+            const rateLimitDoc = await db.collection('rateLimits').findOne({ _id: email });
+            if (rateLimitDoc && rateLimitDoc.hits >= 5 && new Date(rateLimitDoc.expiresAt) > new Date()) {
 
+                res.status(429).json({ message: 'Account blocked. Try again in 30 minutes.' });
+                return;
+            }
+        }
+
+        const user = await User.findOne({ email });
         if (!user) {
-            // Generic success message to prevent account enumeration
-            res.status(200).json({ message: 'If an account exists with that email, a reset link has been sent' });
+            res.status(200).json({ message: 'If an account exists, a reset link has been sent' });
             return;
         }
 
-        // Generate token
         const resetToken = crypto.randomBytes(32).toString('hex');
-
-        // Hash token before saving
-        const hashedToken = crypto
-            .createHash('sha256')
-            .update(resetToken)
-            .digest('hex');
+        const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
 
         user.resetPasswordToken = hashedToken;
-        user.resetPasswordExpire = new Date(Date.now() + 5 * 60 * 1000); // 5 min
-
+        user.resetPasswordExpire = new Date(Date.now() + 5 * 60 * 1000);
         await user.save();
 
-        // Create reset link
         const resetUrl = `http://localhost:5173/reset-password/${resetToken}`;
-
-        const message = `
-      You requested a password reset.
-      Click this link to reset password:
-
-      ${resetUrl}
-
-      This link expires in 5 minutes.
-    `;
+        const message = `Click this link to reset password: ${resetUrl}`;
 
         try {
             await sendEmail(user.email, 'Password Reset', message);
-            res.status(200).json({ message: 'If an account exists with that email, a reset link has been sent' });
+
+            res.status(200).json({ message: 'If an account exists, a reset link has been sent' });
         } catch (emailError) {
-            console.error('Error in forgotPassword while sending email:', emailError);
             user.resetPasswordToken = undefined;
             user.resetPasswordExpire = undefined;
             await user.save();
             res.status(500).json({ message: 'Email could not be sent' });
         }
-
     } catch (error: any) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }

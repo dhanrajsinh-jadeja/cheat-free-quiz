@@ -21,7 +21,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         const profile = await authService.getProfile();
         setUser(profile);
       } catch (error) {
-        console.error('Failed to fetch user profile:', error);
+        // Error handled silently
       }
     };
     fetchProfile();
@@ -57,8 +57,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       `}>
         <div className="mb-12 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-linear-to-br from-[#60a5fa] to-[#3b82f6] rounded-[10px] flex items-center justify-center">
-              <BookOpen size={24} />
+            <div className="w-10 h-10 rounded-[10px] overflow-hidden flex-shrink-0">
+              <img src="/logo.png" alt="QuizMaster logo" className="w-full h-full object-contain" />
             </div>
             <h2 className="text-xl font-extrabold tracking-tight">QuizMaster</h2>
           </div>

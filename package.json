@@ -15,6 +15,7 @@
     "@iroomit/rate-limit-mongodb": "^1.0.1",
     "@react-oauth/google": "^0.13.4",
     "bcryptjs": "^3.0.3",
+    "compression": "^1.8.1",
     "cors": "^2.8.6",
     "crypto": "^1.0.1",
     "date-fns": "^4.1.0",
@@ -22,6 +23,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.1",
     "google-auth-library": "^10.6.1",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.331.0",
     "mongoose": "^9.2.3",
@@ -35,6 +37,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.1",
     "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",

@@ -110,20 +110,6 @@ const SignUpPage: React.FC = () => {
                 )}
 
                 <div className="flex flex-col gap-2">
-                    <label className="text-[0.95rem] font-medium text-text-white">Full name</label>
-                    <Input
-                        icon={User}
-                        type="text"
-                        name="name"
-                        placeholder="John Doe"
-                        required
-                        autoComplete="name"
-                        value={formData.fullName}
-                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    />
-                </div>
-
-                <div className="flex flex-col gap-2">
                     <label className="text-[0.95rem] font-medium text-text-white">Email address</label>
                     <Input
                         icon={Mail}
@@ -148,6 +134,19 @@ const SignUpPage: React.FC = () => {
                         autoComplete="new-password"
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    />
+                </div>
+                 <div className="flex flex-col gap-2">
+                    <label className="text-[0.95rem] font-medium text-text-white">Full name</label>
+                    <Input
+                        icon={User}
+                        type="text"
+                        name="name"
+                        placeholder="Username"
+                        required
+                        autoComplete="name"
+                        value={formData.fullName}
+                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                     />
                 </div>
 

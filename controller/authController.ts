@@ -148,9 +148,28 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
 
         // Send Welcome Email to new registered user
         const welcomeSubject = 'Welcome to Quiz App!';
-        const welcomeText = `Hi ${savedUser.fullName},\n\nWelcome to Quiz App! We're excited to have you on board.`;
-        const welcomeHtml = `<div style="font-family: Arial, sans-serif; padding: 20px;"><h2>Welcome to Quiz App!</h2><p>Hi ${savedUser.fullName}, welcome to our community!</p></div>`;
-
+            const welcomeText = `Hi ${savedUser.fullName},\n\nWelcome to Quiz App! We're excited to have you on board. You can now create and take quizzes to test your knowledge.\n\nBest regards,\nThe Quiz App Team`;
+            const welcomeHtml = `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                    <h2 style="color: #4F46E5; text-align: center;">Welcome to Quiz App!</h2>
+                    <p>Hi <strong>${savedUser.fullName}</strong>,</p>
+                    <p>We're absolutely thrilled to have you join our community!</p>
+                    <div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <p style="margin: 0;">With Quiz App, you can:</p>
+                        <ul style="color: #374151;">
+                            <li>Create custom quizzes with ease</li>
+                            <li>Take challenging assessments</li>
+                            <li>Analyze your performance with detailed reports</li>
+                        </ul>
+                    </div>
+                    <p>Ready to get started? Head over to your dashboard and create your first quiz!</p>
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Go to Dashboard</a>
+                    </div>
+                    <hr style="margin-top: 40px; border: 0; border-top: 1px solid #eee;" />
+                    <p style="font-size: 12px; color: #6b7280; text-align: center;">Best regards,<br>The Quiz App Team</p>
+                </div>
+            `;
         try {
             await sendEmail(savedUser.email, welcomeSubject, welcomeText, welcomeHtml);
         } catch (emailError) {

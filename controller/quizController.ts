@@ -1,4 +1,5 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { Types } from 'mongoose';
 import Quiz from '../models/quizModel';
 import Attempt from '../models/attemptModel';
 import '../models/userModel'; // Ensures user model is registered for mongoose.populate('user')
@@ -45,8 +46,14 @@ export const createQuiz = async (req: AuthRequest, res: Response): Promise<void>
  * Get a quiz by ID 
  * Typically used by students taking the quiz, or creators previewing it.
  */
-export const getQuiz = async (req: Request, res: Response): Promise<void> => {
+export const getQuiz = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ message: 'Unauthorized' });
+            return;
+        }
+
         // Fetch quiz by its unique MongoDB ObjectId
         const quiz = await Quiz.findById(req.params.id);
 
@@ -56,13 +63,30 @@ export const getQuiz = async (req: Request, res: Response): Promise<void> => {
         }
 
         // Security check: Only return the quiz to standard users if it has been published
-        if (!quiz.isPublished) {
+        const isCreator = quiz.creator.toString() === userId;
+        if (!quiz.isPublished && !isCreator) {
             res.status(403).json({ message: 'Quiz is not published yet' });
             return;
         }
 
+        // Enforcement: If NOT the creator, check for max attempts
+        if (!isCreator && quiz.maxAttempts > 0) {
+            const attemptCount = await Attempt.countDocuments({
+                quiz: quiz._id,
+                user: userId,
+                status: { $in: ['COMPLETED', 'AUTO_SUBMITTED'] }
+            });
+
+            if (attemptCount >= quiz.maxAttempts) {
+                res.status(403).json({ 
+                    message: `Limit Reached: You have already used all ${quiz.maxAttempts} allowed attempts for this quiz.` 
+                });
+                return;
+            }
+        }
+
         // Security check: If the quiz has a scheduled start time, block it if it hasn't started
-        if (quiz.startDate && new Date() < quiz.startDate) {
+        if (!isCreator && quiz.startDate && new Date() < quiz.startDate) {
             res.status(403).json({ 
                 message: 'Quiz has not started yet', 
                 startDate: quiz.startDate 
@@ -71,7 +95,7 @@ export const getQuiz = async (req: Request, res: Response): Promise<void> => {
         }
 
         // Security check: If the quiz has a strict end time, block it if it's expired
-        if (quiz.endDate && new Date() > quiz.endDate) {
+        if (!isCreator && quiz.endDate && new Date() > quiz.endDate) {
             res.status(410).json({ message: 'Quiz has expired' });
             return;
         }
@@ -334,16 +358,13 @@ export const getAttemptStatus = async (req: AuthRequest, res: Response): Promise
         const quizId = req.params.id;
         const userId = req.user?.id;
 
-        if (!userId) {
-            res.status(401).json({ message: 'Unauthorized' });
-            return;
-        }
-
         const quiz = await Quiz.findById(quizId);
         if (!quiz) {
             res.status(404).json({ message: 'Quiz not found' });
             return;
         }
+
+        const isCreator = quiz.creator.toString() === userId;
 
         const attemptCount = await Attempt.countDocuments({
             quiz: quizId,
@@ -351,7 +372,7 @@ export const getAttemptStatus = async (req: AuthRequest, res: Response): Promise
             status: { $in: ['COMPLETED', 'AUTO_SUBMITTED'] } // Count finished attempts
         });
 
-        const canAttempt = quiz.maxAttempts === 0 || attemptCount < quiz.maxAttempts;
+        const canAttempt = isCreator || quiz.maxAttempts === 0 || attemptCount < quiz.maxAttempts;
 
         res.json({
             attemptCount,
@@ -400,25 +421,49 @@ export const submitQuiz = async (req: AuthRequest, res: Response): Promise<void>
         }
 
         let score = 0;
-        const processedAnswers = answers.map((ans: any) => {
+        const processedAnswers = answers.filter((ans: any) => {
+            // Only process answers for valid question IDs
+            return ans?.questionId && Types.ObjectId.isValid(ans.questionId);
+        }).map((ans: any) => {
             const question = quiz.questions.find((q: any) => q._id.toString() === ans.questionId);
-            if (!question) return ans;
+            
+            if (question) {
+                const isCorrect = 
+                    question.correctAnswers.length === ans.selectedOptions.length &&
+                    question.correctAnswers.every((val: number) => ans.selectedOptions.includes(val));
 
-            const isCorrect = 
-                question.correctAnswers.length === ans.selectedOptions.length &&
-                question.correctAnswers.every((val: number) => ans.selectedOptions.includes(val));
-
-            if (isCorrect) {
-                score += question.marks;
+                if (isCorrect) {
+                    // Ensure marks is a number before adding to score
+                    const marksValue = Number(question.marks) || 0;
+                    score += marksValue;
+                }
             }
 
             return {
-                questionId: ans.questionId,
-                selectedOptions: ans.selectedOptions
+                questionId: new Types.ObjectId(ans.questionId),
+                selectedOptions: (ans.selectedOptions || []).map(Number)
             };
         });
 
-        const isPassed = score >= quiz.passingMarks;
+        // 🛑 Anti-Cheat Enforcement 🛑
+        const hasCheated = proctoringViolations && proctoringViolations > 0;
+        if (hasCheated) {
+            score = 0; // Absolute zero tolerance for cheating
+        }
+
+        const isPassed = hasCheated ? false : score >= quiz.passingMarks;
+        const isCreator = quiz.creator.toString() === userId;
+
+        if (isCreator) {
+            res.status(200).json({
+                message: 'Preview submitted successfully',
+                score,
+                totalMarks: quiz.totalMarks,
+                isPassed,
+                isPreview: true
+            });
+            return;
+        }
 
         const attempt = new Attempt({
             quiz: quizId,
@@ -443,7 +488,12 @@ export const submitQuiz = async (req: AuthRequest, res: Response): Promise<void>
             attemptId: attempt._id
         });
     } catch (error: any) {
-        res.status(500).json({ message: 'Error submitting quiz', error: error.message });
+        console.error('Submission Error:', error);
+        res.status(500).json({ 
+            message: 'Error submitting quiz', 
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 };
 
@@ -571,7 +621,7 @@ export const getQuizAnalytics = async (req: AuthRequest, res: Response): Promise
                 totalMarks: a.totalMarks,
                 timeTaken: durationMins,
                 submittedAt: a.endTime,
-                status: a.isPassed ? 'passed' : 'failed'
+                status: a.proctoringViolations > 0 ? 'cheated' : (a.isPassed ? 'passed' : 'failed')
             };
         });
 
@@ -649,9 +699,11 @@ export const getAttemptDetails = async (req: AuthRequest, res: Response): Promis
         const durationMins = Math.round(durationMs / 60000);
 
         // Map questions with user responses
+        const isCreator = quiz.creator.toString() === userId;
+
         const questionReview = quiz.questions.map((q: any) => {
             const userAns = attempt.answers.find(a => a.questionId.toString() === q._id.toString());
-            const isCorrect = userAns ? (
+            const correctFlag = userAns ? (
                 userAns.selectedOptions.length === q.correctAnswers.length &&
                 userAns.selectedOptions.every((val: number) => q.correctAnswers.includes(val))
             ) : false;
@@ -661,12 +713,16 @@ export const getAttemptDetails = async (req: AuthRequest, res: Response): Promis
                 text: q.text,
                 options: q.options,
                 type: q.type,
-                correctAnswers: q.correctAnswers,
+                // 🔒 Security: Only show correct keys to the creator
+                correctAnswers: isCreator ? q.correctAnswers : [],
                 userSelectedOptions: userAns ? userAns.selectedOptions : [],
-                isCorrect,
+                // 🔒 Student only sees IF they were correct if you want, but for max security we can mask this too
+                // For now, we'll keep isCorrect for the score logic but we'll hide it in UI for students
+                isCorrect: isCreator ? correctFlag : undefined, 
                 marks: q.marks,
-                earnedMarks: isCorrect ? q.marks : 0,
-                explanation: q.explanation
+                earnedMarks: correctFlag ? q.marks : 0,
+                // 🔒 Security: Only show explanations to the creator
+                explanation: isCreator ? q.explanation : undefined
             };
         });
 
@@ -681,6 +737,7 @@ export const getAttemptDetails = async (req: AuthRequest, res: Response): Promis
             timeTaken: durationMins,
             submittedAt: attempt.endTime,
             proctoringViolations: attempt.proctoringViolations,
+            isCreator, // Send flag so UI can adjust
             questions: questionReview
         });
     } catch (error: any) {

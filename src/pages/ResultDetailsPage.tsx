@@ -29,6 +29,7 @@ interface AttemptDetails {
     submittedAt: string;
     proctoringViolations: number;
     questions: QuestionReview[];
+    isCreator?: boolean;
 }
 
 const ResultDetailsPage: React.FC = () => {
@@ -172,7 +173,10 @@ const ResultDetailsPage: React.FC = () => {
 
                     <div className="space-y-6">
                         {details.questions.map((q, idx) => (
-                            <div key={q.questionId} className={`bg-white rounded-[32px] border transition-all duration-300 overflow-hidden ${q.isCorrect ? 'border-emerald-100 hover:border-emerald-200 shadow-emerald-50' : 'border-rose-100 hover:border-rose-200 shadow-rose-50'} shadow-sm hover:shadow-md`}>
+                            <div key={q.questionId} className={`bg-white rounded-[32px] border transition-all duration-300 overflow-hidden 
+                                ${details.isCreator ? 
+                                    (q.isCorrect ? 'border-emerald-100 shadow-emerald-50' : 'border-rose-100 shadow-rose-50') : 
+                                    'border-slate-100 shadow-sm'}`}>
                                 <div className="p-6 md:p-8 flex flex-col gap-6">
                                     {/* Question Header */}
                                     <div className="flex items-start justify-between gap-4">
@@ -186,10 +190,17 @@ const ResultDetailsPage: React.FC = () => {
                                                 </h3>
                                                 <div className="flex flex-wrap items-center gap-3 mt-1">
                                                     <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[0.65rem] font-bold uppercase tracking-widest">{q.type}</span>
-                                                    <span className={`flex items-center gap-1 font-bold text-xs ${q.isCorrect ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                        {q.isCorrect ? <CheckCircle size={12} /> : <X size={12} />}
-                                                        {q.earnedMarks} / {q.marks} Marks
-                                                    </span>
+                                                    {details.isCreator && (
+                                                        <span className={`flex items-center gap-1 font-bold text-xs ${q.isCorrect ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                            {q.isCorrect ? <CheckCircle size={12} /> : <X size={12} />}
+                                                            {q.earnedMarks} / {q.marks} Marks
+                                                        </span>
+                                                    )}
+                                                    {!details.isCreator && (
+                                                        <span className="text-slate-500 font-bold text-xs">
+                                                            {q.marks} Marks Possible
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -199,27 +210,33 @@ const ResultDetailsPage: React.FC = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {q.options.map((opt, optIdx) => {
                                             const isSelected = q.userSelectedOptions.includes(optIdx);
-                                            const isCorrect = q.correctAnswers.includes(optIdx);
+                                            const isCorrectKey = q.correctAnswers.includes(optIdx);
                                             
-                                            let borderClass = 'border-slate-100';
-                                            let bgClass = 'bg-slate-50/50';
+                                            let borderClass = isSelected ? 'border-indigo-500 bg-indigo-50/30' : 'border-slate-100 bg-slate-50/50';
                                             let icon = null;
 
-                                            if (isSelected && isCorrect) {
-                                                borderClass = 'border-emerald-500 bg-emerald-50/50';
-                                                icon = <CheckCircle size={16} className="text-emerald-600" />;
-                                            } else if (isSelected && !isCorrect) {
-                                                borderClass = 'border-rose-500 bg-rose-50/50';
-                                                icon = <X size={16} className="text-rose-600" />;
-                                            } else if (!isSelected && isCorrect) {
-                                                borderClass = 'border-emerald-500/30 bg-emerald-50/20';
-                                                icon = <CheckCircle size={16} className="text-emerald-500/50" />;
+                                            // Only show red/green logic to the creator
+                                            if (details.isCreator) {
+                                                if (isSelected && isCorrectKey) {
+                                                    borderClass = 'border-emerald-500 bg-emerald-50/50';
+                                                    icon = <CheckCircle size={16} className="text-emerald-600" />;
+                                                } else if (isSelected && !isCorrectKey) {
+                                                    borderClass = 'border-rose-500 bg-rose-50/50';
+                                                    icon = <X size={16} className="text-rose-600" />;
+                                                } else if (!isSelected && isCorrectKey) {
+                                                    borderClass = 'border-emerald-500/30 bg-emerald-50/20';
+                                                    icon = <CheckCircle size={16} className="text-emerald-500/50" />;
+                                                }
+                                            } else if (isSelected) {
+                                                // Simplified look for attempter
+                                                borderClass = 'border-indigo-600 bg-indigo-50/50';
+                                                icon = <div className="w-2 h-2 bg-indigo-600 rounded-full"></div>;
                                             }
 
                                             return (
                                                 <div 
                                                     key={optIdx} 
-                                                    className={`p-4 rounded-2xl border-2 flex items-center justify-between gap-3 ${borderClass} ${bgClass}`}
+                                                    className={`p-4 rounded-2xl border-2 flex items-center justify-between gap-3 ${borderClass}`}
                                                 >
                                                     <div className="flex items-center gap-3">
                                                         <span className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center text-[0.65rem] font-bold ${isSelected ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-400'}`}>
@@ -236,7 +253,7 @@ const ResultDetailsPage: React.FC = () => {
                                     </div>
 
                                     {/* Explanation */}
-                                    {q.explanation && (
+                                    {details.isCreator && q.explanation && (
                                         <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 flex gap-3">
                                             <Info size={20} className="text-indigo-500 shrink-0" />
                                             <div>

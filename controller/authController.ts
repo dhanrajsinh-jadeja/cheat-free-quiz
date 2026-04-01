@@ -148,8 +148,8 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
 
         // Send Welcome Email to new registered user
         const welcomeSubject = 'Welcome to Quiz App!';
-            const welcomeText = `Hi ${savedUser.fullName},\n\nWelcome to Quiz App! We're excited to have you on board. You can now create and take quizzes to test your knowledge.\n\nBest regards,\nThe Quiz App Team`;
-            const welcomeHtml = `
+        const welcomeText = `Hi ${savedUser.fullName},\n\nWelcome to Quiz App! We're excited to have you on board. You can now create and take quizzes to test your knowledge.\n\nBest regards,\nThe Quiz App Team`;
+        const welcomeHtml = `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
                     <h2 style="color: #4F46E5; text-align: center;">Welcome to Quiz App!</h2>
                     <p>Hi <strong>${savedUser.fullName}</strong>,</p>

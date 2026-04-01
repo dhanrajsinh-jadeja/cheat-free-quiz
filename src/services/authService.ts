@@ -1,6 +1,5 @@
 import { User } from '../types/user';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import { apiClient } from './apiClient';
 
 interface AuthResponse {
     token: string;
@@ -13,7 +12,7 @@ export const authService = {
      * Sign up a new user
      */
     signUp: async (data: any): Promise<AuthResponse> => {
-        const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+        const response = await apiClient('/auth/signup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
@@ -39,7 +38,7 @@ export const authService = {
      * Login user
      */
     login: async (data: any): Promise<AuthResponse> => {
-        const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        const response = await apiClient('/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
@@ -64,7 +63,7 @@ export const authService = {
      * Google Login
      */
     googleLogin: async (credential: string): Promise<AuthResponse> => {
-        const response = await fetch(`${API_BASE_URL}/auth/google`, {
+        const response = await apiClient('/auth/google', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ credential }),
@@ -94,7 +93,7 @@ export const authService = {
      * Forgot Password
      */
     forgotPassword: async (email: string): Promise<{ message: string }> => {
-        const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        const response = await apiClient('/auth/forgot-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email }),
@@ -115,7 +114,7 @@ export const authService = {
      * Reset Password
      */
     resetPassword: async (token: string, password: string): Promise<{ message: string }> => {
-        const response = await fetch(`${API_BASE_URL}/auth/reset-password/${token}`, {
+        const response = await apiClient(`/auth/reset-password/${token}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ password }),
@@ -134,12 +133,10 @@ export const authService = {
      * Get current user profile
      */
     getProfile: async (): Promise<User> => {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+        const response = await apiClient('/auth/profile', {
             method: 'GET',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
             },
         });
 

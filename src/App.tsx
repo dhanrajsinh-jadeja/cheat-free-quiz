@@ -1,6 +1,7 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { authService } from './services/authService';
 
 // Specialized components
 import ProtectedRoute from './components/ProtectedRoute';
@@ -9,6 +10,7 @@ import PublicRoute from './components/PublicRoute';
 // Lazy load all page components
 const SigninPage = lazy(() => import('./pages/SigninPage'));
 const SignUpPage = lazy(() => import('./pages/SignUpPage'));
+const HomePage = lazy(() => import('./pages/HomePage'));
 const CreateQuizPage = lazy(() => import('./pages/CreateQuizPage'));
 const MyQuizzesPage = lazy(() => import('./pages/MyQuizzesPage'));
 const QuizRulesPage = lazy(() => import('./pages/QuizRulesPage'));
@@ -28,6 +30,22 @@ const PageLoader = () => (
 );
 
 function App() {
+    useEffect(() => {
+        // On app load, proactively verify the token if one exists.
+        // If it's invalid (e.g. user was deleted), apiClient will intercept the 401 
+        // and automatically clear localStorage, forcing a redirect to /login.
+        const verifyAuth = async () => {
+            if (localStorage.getItem('token')) {
+                try {
+                    await authService.getProfile();
+                } catch (error) {
+                    console.warn('Initial auth verification failed. Token might be stale.');
+                }
+            }
+        };
+        verifyAuth();
+    }, []);
+
     return (
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Suspense fallback={<PageLoader />}>
@@ -37,7 +55,7 @@ function App() {
                     <Route path="/signup" element={<PublicRoute><SignUpPage /></PublicRoute>} />
                     <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
                     <Route path="/reset-password/:token" element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
-                    <Route path="/" element={<Navigate to="/login" replace />} />
+                    <Route path="/" element={<HomePage />} />
 
                     {/* Protected Routes (Require Authentication) */}
                     <Route path="/dashboard" element={<ProtectedRoute><Navigate to="/profile" replace /></ProtectedRoute>} />

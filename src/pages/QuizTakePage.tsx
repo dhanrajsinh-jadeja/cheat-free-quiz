@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, ChevronLeft, ChevronRight, AlertTriangle, ShieldCheck, Loader2, Flag, Monitor, Info, CheckCircle2, X } from 'lucide-react';
+import { Clock, ChevronLeft, ChevronRight, AlertTriangle, ShieldCheck, ShieldAlert, Loader2, Flag, Monitor, Info, CheckCircle2, X, BarChart2 } from 'lucide-react';
 import { quizService } from '../services/quizService';
+import { authService } from '../services/authService';
 
 interface Question {
     id: string;
@@ -29,6 +30,12 @@ const QuizTakePage: React.FC = () => {
     const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
     const [proctoringViolations, setProctoringViolations] = useState(0);
     const [startTime, setStartTime] = useState<string | null>(null);
+    const [isPreviewMode, setIsPreviewMode] = useState(false);
+    const [previewScore, setPreviewScore] = useState<any>(null);
+    const [submittedAttemptId, setSubmittedAttemptId] = useState<string | null>(null);
+    
+    // 🔒 Submission Guard Ref (Updates synchronously ⚡)
+    const submissionLock = useRef(false);
 
     // Fisher-Yates (Knuth) Shuffle Algorithm
     const shuffleArray = <T,>(array: T[]): T[] => {
@@ -44,16 +51,24 @@ const QuizTakePage: React.FC = () => {
         const fetchQuiz = async () => {
             if (!id) return;
             try {
-                const data = await quizService.getQuiz(id);
+                const [data, profile] = await Promise.all([
+                    quizService.getQuiz(id),
+                    authService.getProfile()
+                ]);
+
                 setQuizInfo(data as any);
                 setTimeLeft(data.timeLimit * 60);
+
+                if (profile && data.creator === (profile as any)._id) {
+                    setIsPreviewMode(true);
+                }
 
                 // Implement Shuffling Logic while preserving original indices
                 let processedQuestions = data.questions.map((q: any) => {
                     // Create an array of { text, originalIdx } to track after shuffle
                     const optionsWithIndices = q.options.map((text: string, idx: number) => ({ text, originalIdx: idx }));
                     const shuffledOptions = shuffleArray<{ text: string; originalIdx: number }>(optionsWithIndices);
-                    
+
                     return {
                         ...q,
                         id: q._id, // Ensure we use _id as id
@@ -78,33 +93,48 @@ const QuizTakePage: React.FC = () => {
     }, [id]);
 
     const handleSubmit = useCallback(async () => {
-        if (isSubmitted || !id) return;
+        // 🔥 The absolute guard: Only allow one submission lifecycle ever.
+        if (submissionLock.current || isSubmitted || !id) return;
+        submissionLock.current = true;
         setIsSubmitted(true);
-        
+
         try {
             // Map answers to backend format using original indices
             const formattedAnswers = questions.map(q => {
                 const selectedShuffledIndices = answers[q.id] || [];
                 const selectedOriginalIndices = selectedShuffledIndices.map(shuffledIdx => q.originalOptionsIndices![shuffledIdx]);
-                
+
                 return {
                     questionId: q.id,
                     selectedOptions: selectedOriginalIndices
                 };
             });
 
-            await quizService.submitQuiz(id, formattedAnswers, proctoringViolations, startTime || new Date().toISOString());
-            
+            const result = await quizService.submitQuiz(id, formattedAnswers, proctoringViolations, startTime || new Date().toISOString());
+
+            if (result.isPreview) {
+                setPreviewScore(result);
+            } else if (result.attemptId) {
+                setSubmittedAttemptId(result.attemptId);
+            }
+
             // Navigate to Dashboard after short delay
-            setTimeout(() => {
-                navigate('/profile');
-            }, 3000);
+            // But IF it's a violation, we don't auto-redirect, forcing them to see the 0 marks warning
+            if (!showCheatWarning) {
+                setTimeout(() => {
+                    if (!submissionLock.current) return; // Case where they might have clicked 'View Results' already
+                    if (!window.location.pathname.includes('/quiz/take')) return;
+                    navigate(result.isPreview ? '/my-quizzes' : '/profile', { replace: true });
+                }, 8000);
+            }
         } catch (err: any) {
             // Error handled with state for UI display
             setError(err.message || "Failed to submit results. Please contact support.");
+            // Reset the state so the user can potentially try again if it was a network error
             setIsSubmitted(false);
+            submissionLock.current = false;
         }
-    }, [isSubmitted, id, questions, answers, proctoringViolations, startTime, navigate]);
+    }, [isSubmitted, id, questions, answers, proctoringViolations, startTime, navigate, showCheatWarning]);
 
     // Proctoring Logic
     useEffect(() => {
@@ -127,6 +157,15 @@ const QuizTakePage: React.FC = () => {
         window.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('blur', handleBlur);
 
+        // 🛑 Prevent Refresh/Close Warning
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (!isSubmitted && questions.length > 0) {
+                e.preventDefault();
+                e.returnValue = "You have an active quiz session. Leaving will auto-submit your current progress.";
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
         const handlePopState = (_e: PopStateEvent) => {
             window.history.pushState(null, '', window.location.href);
         };
@@ -136,6 +175,7 @@ const QuizTakePage: React.FC = () => {
         return () => {
             window.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('blur', handleBlur);
+            window.removeEventListener('beforeunload', handleBeforeUnload);
             window.removeEventListener('popstate', handlePopState);
         };
     }, [handleSubmit, isSubmitted, questions.length]);
@@ -205,18 +245,28 @@ const QuizTakePage: React.FC = () => {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-bg-light flex items-center justify-center p-6">
-                <div className="bg-white rounded-[40px] p-12 max-w-[500px] w-full text-center border border-border-color shadow-2xl">
-                    <div className="w-20 h-20 bg-rose-500/10 text-rose-500 rounded-3xl flex items-center justify-center mx-auto mb-8 rotate-12">
-                        <AlertTriangle size={40} />
+            <div className="min-h-screen bg-bg-light flex items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-rose-50/50 via-transparent to-transparent">
+                <div className="bg-white rounded-[40px] p-12 max-w-[500px] w-full text-center border border-border-color shadow-2xl relative overflow-hidden group">
+                    <div className="absolute top-0 left-0 w-full h-2 bg-rose-500/20 group-hover:bg-rose-500 transition-colors duration-500"></div>
+                    <div className="w-24 h-24 bg-rose-500 text-white rounded-[32px] flex items-center justify-center mx-auto mb-10 rotate-12 shadow-xl shadow-rose-500/20 group-hover:rotate-0 transition-transform duration-500">
+                        <AlertTriangle size={48} />
                     </div>
-                    <h2 className="text-3xl font-black text-text-dark mb-4">Access Denied</h2>
-                    <p className="text-text-muted mb-10 leading-relaxed font-medium">{error}</p>
-                    <button 
-                        onClick={() => navigate('/login')} 
-                        className="w-full bg-primary text-white py-4 font-bold rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
+                    <h2 className="text-4xl font-black text-text-dark mb-4 tracking-tight">Access Denied</h2>
+                    <p className="text-rose-500 mb-8 text-lg font-bold italic border-l-4 border-rose-500 pl-4 py-2 bg-rose-50 rounded-r-xl">
+                        {error}
+                    </p>
+                    <div className="mb-10 text-left bg-slate-50 p-6 rounded-3xl border border-slate-200">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">System Analysis</p>
+                        <p className="text-xs text-slate-500 leading-relaxed font-medium italic">
+                            The server encountered an internal problem (500) while finalizing your responses. This usually indicates a database validation error or a temporary connection lapse.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => navigate('/my-quizzes', { replace: true })}
+                        className="w-full bg-slate-950 text-white py-5 font-bold rounded-2xl hover:bg-black active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3 shadow-xl"
                     >
-                        Return to Hub
+                        <ChevronLeft size={24} />
+                        <span>Return to Dashboard</span>
                     </button>
                 </div>
             </div>
@@ -225,26 +275,97 @@ const QuizTakePage: React.FC = () => {
 
     if (isSubmitted) {
         return (
-            <div className="min-h-screen bg-bg-light flex items-center justify-center p-6">
-                <div className="bg-white rounded-[48px] p-12 max-w-[580px] w-full text-center border border-border-color shadow-2xl animate-in fade-in zoom-in duration-700">
-                    <div className={`w-24 h-24 rounded-[32px] flex items-center justify-center mx-auto mb-10 shadow-2xl transform hover:scale-110 transition-transform ${showCheatWarning ? 'bg-rose-500 text-white shadow-rose-500/20' : 'bg-emerald-500 text-white shadow-emerald-500/20'}`}>
-                        {showCheatWarning ? <AlertTriangle size={48} /> : <CheckCircle2 size={48} />}
+            <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6 relative overflow-hidden">
+                {/* Background Atmosphere */}
+                <div className={`absolute top-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full blur-[120px] opacity-20 ${showCheatWarning ? 'bg-rose-500' : 'bg-indigo-500 animate-pulse'}`}></div>
+                <div className={`absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[120px] opacity-20 ${showCheatWarning ? 'bg-rose-400' : 'bg-blue-400'}`}></div>
+
+                <div className="bg-white/80 backdrop-blur-2xl rounded-[48px] p-10 md:p-16 max-w-[680px] w-full text-center border border-white/40 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.1)] animate-in fade-in zoom-in slide-in-from-bottom-10 duration-1000 relative z-10">
+                    {showCheatWarning && (
+                        <div className="absolute top-0 left-0 w-full h-2 bg-rose-600 rounded-t-[48px]"></div>
+                    )}
+
+                    <div className={`w-24 h-24 md:w-32 md:h-32 rounded-[40px] flex items-center justify-center mx-auto mb-10 shadow-2xl transform transition-all duration-700 hover:rotate-6
+                        ${showCheatWarning ? 'bg-rose-600 text-white shadow-rose-200' : 
+                          isPreviewMode ? 'bg-indigo-600 text-white shadow-indigo-200' : 
+                          'bg-emerald-600 text-white shadow-emerald-200'}
+                    `}>
+                        {showCheatWarning ? <ShieldAlert size={64} /> : isPreviewMode ? <ShieldCheck size={64} /> : <CheckCircle2 size={64} />}
                     </div>
-                    <h2 className="text-4xl font-black text-text-dark mb-6 tracking-tight">
-                        {showCheatWarning ? 'Session Terminated' : 'Mission Accomplished'}
+
+                    <h2 className={`text-4xl md:text-5xl font-black mb-6 tracking-tight ${showCheatWarning ? 'text-rose-700' : 'text-slate-900'}`}>
+                        {showCheatWarning ? 'VIOLATION DETECTED' : isPreviewMode ? 'Session Finalized' : 'Mission Accomplished'}
                     </h2>
-                    <p className="text-text-muted leading-relaxed mb-10 text-lg font-medium mx-auto max-w-sm">
-                        {showCheatWarning
-                            ? "A security violation was detected. Your responses have been locked and submitted for review."
-                            : "Your assessment has been securely received. Our proctors will verify the session shortly."}
-                    </p>
-                    <div className="flex flex-col items-center gap-4">
-                        <div className="h-1 w-48 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-primary animate-[progress_5s_linear_forward]"></div>
-                        </div>
-                        <p className="text-primary font-bold text-xs uppercase tracking-[0.3em] animate-pulse">
-                            Finalizing Redirect
+
+                    <div className="max-w-md mx-auto mb-12 space-y-6">
+                        <p className={`text-lg md:text-xl leading-relaxed font-bold ${showCheatWarning ? 'text-rose-600' : 'text-slate-500'}`}>
+                            {showCheatWarning
+                                ? "STOP: A critical proctoring violation was detected. Your session has been force-interrupted for security."
+                                : isPreviewMode
+                                    ? `Review Phase Complete. Final Score: ${previewScore?.score || 0}/${previewScore?.totalMarks || 0}.`
+                                    : "Assessment securely received. Your responses have been encrypted and locked in the audit log."}
                         </p>
+                        
+                        {showCheatWarning ? (
+                            <div className="bg-rose-50 p-8 rounded-[32px] border border-rose-100 border-dashed relative group">
+                                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-rose-200">System Penalty</div>
+                                <p className="text-rose-500 font-bold leading-relaxed">
+                                    Access revoked. Attempt permanently closed. Penalty applied:
+                                    <span className="block text-4xl font-black mt-3 text-rose-700">0 MARKS</span>
+                                </p>
+                            </div>
+                        ) : (
+                            !isPreviewMode && (
+                                <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200/60 shadow-inner flex items-center justify-center gap-4">
+                                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200 shrink-0">
+                                        <Monitor size={20} />
+                                    </div>
+                                    <p className="text-xs text-slate-500 text-left font-medium leading-relaxed">
+                                        Our proctors will verify your session metadata. Verification takes up to 24 hours.
+                                    </p>
+                                </div>
+                            )
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-4">
+                        {showCheatWarning ? (
+                            <button
+                                onClick={() => navigate('/my-quizzes', { replace: true })} 
+                                className="w-full bg-slate-950 text-white py-6 font-black rounded-3xl hover:bg-black active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-4 shadow-2xl shadow-slate-200 group"
+                            >
+                                <ChevronLeft size={28} className="group-hover:-translate-x-1 transition-transform" />
+                                <span className="text-lg">EXIT SECURE ENVIRONMENT</span>
+                            </button>
+                        ) : (
+                            <div className="flex flex-col gap-4 w-full">
+                                {!isPreviewMode && submittedAttemptId && (
+                                    <button
+                                        onClick={() => navigate(`/result/${submittedAttemptId}`, { replace: true })}
+                                        className="w-full bg-indigo-600 text-white py-6 font-black rounded-[32px] hover:bg-indigo-700 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-4 shadow-2xl shadow-indigo-200 group"
+                                    >
+                                        <BarChart2 size={24} className="group-hover:scale-110 transition-transform" />
+                                        <span className="text-lg">VIEW YOUR RESPONSE</span>
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => navigate(isPreviewMode ? '/my-quizzes' : '/profile', { replace: true })}
+                                    className="w-full bg-slate-950 text-white py-6 font-black rounded-[32px] hover:bg-black active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-4 shadow-2xl shadow-slate-200 group"
+                                >
+                                    <span className="text-lg">RETURN TO DASHBOARD</span>
+                                    <ChevronRight size={28} className="group-hover:translate-x-1 transition-transform" />
+                                </button>
+                                
+                                <div className="flex flex-col items-center gap-4 mt-4">
+                                    <div className="h-1 w-48 bg-slate-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-indigo-600 animate-[progress_8s_linear_forward]"></div>
+                                    </div>
+                                    <p className="text-slate-400 font-bold text-[0.6rem] uppercase tracking-[0.3em]">
+                                        Auto-Syncing Redirect
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -288,9 +409,9 @@ const QuizTakePage: React.FC = () => {
                                         key={idx}
                                         onClick={() => setCurrentIdx(idx)}
                                         className={`h-11 rounded-xl font-bold text-sm transition-all duration-300 relative group
-                                            ${isCurrent ? 'bg-primary text-white shadow-[0_0_20px_rgba(59,130,246,0.4)] scale-110 z-10' : 
-                                              isAnswered ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 
-                                              'bg-white/5 text-text-muted border border-white/5 hover:bg-white/10 hover:text-white'}
+                                            ${isCurrent ? 'bg-primary text-white shadow-[0_0_20px_rgba(59,130,246,0.4)] scale-110 z-10' :
+                                                isAnswered ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                                    'bg-white/5 text-text-muted border border-white/5 hover:bg-white/10 hover:text-white'}
                                         `}
                                     >
                                         {idx + 1}
@@ -317,6 +438,15 @@ const QuizTakePage: React.FC = () => {
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col relative z-10 w-full overflow-y-auto">
+                {/* Preview Banner */}
+                {isPreviewMode && (
+                    <div className="bg-indigo-600 text-white py-2 px-4 text-center text-[10px] font-black uppercase tracking-[0.2em] sticky top-0 z-50 flex items-center justify-center gap-4">
+                        <ShieldCheck size={14} />
+                        <span>Preview Mode: Your results will not be recorded in analytics</span>
+                        <ShieldCheck size={14} />
+                    </div>
+                )}
+
                 {/* Exam Header */}
                 <header className="h-[70px] px-8 md:px-12 flex items-center justify-between sticky top-0 bg-white border-b border-border-color z-30 shadow-sm">
                     <div className="flex items-center gap-6">
@@ -335,9 +465,9 @@ const QuizTakePage: React.FC = () => {
 
                     <div className="flex items-center gap-4">
                         <div className={`group flex items-center gap-3 pl-5 pr-6 py-2.5 rounded-2xl border transition-all duration-500 
-                            ${timeLeft < 60 ? 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse' : 
-                              timeLeft < 300 ? 'bg-amber-50 border-amber-200 text-amber-600' : 
-                              'bg-indigo-50 border-indigo-100 text-primary'}
+                            ${timeLeft < 60 ? 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse' :
+                                timeLeft < 300 ? 'bg-amber-50 border-amber-200 text-amber-600' :
+                                    'bg-indigo-50 border-indigo-100 text-primary'}
                         `}>
                             <Clock size={20} />
                             <span className="font-mono text-xl font-bold tabular-nums">{formatTime(timeLeft)}</span>
@@ -363,7 +493,7 @@ const QuizTakePage: React.FC = () => {
                                         {currentQuestion.text}
                                     </h2>
                                     <div className="flex gap-2 shrink-0">
-                                        <button 
+                                        <button
                                             onClick={handleClearResponse}
                                             className="p-3 md:p-4 rounded-2xl md:rounded-3xl border border-border-color text-text-muted hover:border-slate-300 hover:text-text-dark hover:bg-slate-50 transition-all font-bold text-xs md:text-sm flex items-center gap-2"
                                             title="Clear Selection"
@@ -371,11 +501,11 @@ const QuizTakePage: React.FC = () => {
                                             <X size={18} />
                                             <span className="inline">Clear</span>
                                         </button>
-                                        <button 
+                                        <button
                                             onClick={toggleFlag}
                                             className={`p-3 md:p-4 rounded-2xl md:rounded-3xl border transition-all duration-300 flex items-center gap-2 md:gap-3 font-bold text-xs md:text-sm
-                                                ${flaggedQuestions.has(currentIdx) 
-                                                    ? 'bg-rose-50 border-rose-200 text-rose-500 shadow-lg shadow-rose-100' 
+                                                ${flaggedQuestions.has(currentIdx)
+                                                    ? 'bg-rose-50 border-rose-200 text-rose-500 shadow-lg shadow-rose-100'
                                                     : 'bg-white border-border-color text-text-muted hover:border-slate-300 hover:text-text-dark hover:bg-slate-50'}
                                             `}
                                         >
@@ -400,8 +530,8 @@ const QuizTakePage: React.FC = () => {
                                                 key={idx}
                                                 onClick={() => handleOptionSelect(idx)}
                                                 className={`group relative text-left p-4 md:p-8 rounded-2xl md:rounded-[32px] border-2 transition-all duration-300 flex flex-col gap-2 md:gap-4
-                                                    ${isSelected ? 'bg-primary/5 border-primary shadow-lg shadow-blue-500/10 -translate-y-0.5 md:-translate-y-1' : 
-                                                      'bg-white border-border-color hover:border-slate-300 hover:bg-slate-50'}
+                                                    ${isSelected ? 'bg-primary/5 border-primary shadow-lg shadow-blue-500/10 -translate-y-0.5 md:-translate-y-1' :
+                                                        'bg-white border-border-color hover:border-slate-300 hover:bg-slate-50'}
                                                 `}
                                             >
                                                 <div className="flex items-center gap-3 md:gap-4 z-10">
@@ -445,8 +575,8 @@ const QuizTakePage: React.FC = () => {
 
                         <div className="hidden md:flex items-center gap-2">
                             {questions.map((_, idx) => (
-                                <div 
-                                    key={idx} 
+                                <div
+                                    key={idx}
                                     className={`h-1.5 rounded-full transition-all duration-500 
                                         ${currentIdx === idx ? 'w-8 bg-primary shadow-lg shadow-blue-200' : 'w-2 bg-slate-200'}
                                     `}

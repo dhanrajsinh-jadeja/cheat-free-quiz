@@ -50,10 +50,19 @@ router.post('/:id/publish', authMiddleware, publishQuiz);
 // @access  Private (Requires JWT)
 router.post('/:id/submit', authMiddleware, submitQuiz);
 
+// @route   GET /api/quiz/:id/submit (DEFENSIVE)
+// @desc    Prevent "Cannot GET" errors by handling invalid direct access
+router.get('/:id/submit', authMiddleware, (_req: any, res: any) => {
+    res.status(405).json({ 
+        message: 'Direct access to the submission endpoint via GET is not allowed. Please use the quiz interface.',
+        error: 'Method Not Allowed (405)'
+    });
+});
+
 // @route   GET /api/quiz/:id
 // @desc    Fetch a specific quiz by its ID
-// @access  Public
-router.get('/:id', getQuiz);
+// @access  Private (Requires JWT)
+router.get('/:id', authMiddleware, getQuiz);
 
 // @route   DELETE /api/quiz/:id
 // @desc    Delete a quiz

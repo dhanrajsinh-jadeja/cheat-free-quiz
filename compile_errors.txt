@@ -1,1 +1,1 @@
-src/components/ui/calendar.tsx(42,9): error TS2353: Object literal may only specify known properties, and 'IconLeft' does not exist in type 'Partial<CustomComponents>'.
+src/components/DashboardLayout.tsx(176,104): error TS2339: Property 'role' does not exist on type 'User'.

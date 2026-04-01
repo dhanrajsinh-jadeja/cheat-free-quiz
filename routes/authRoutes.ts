@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import { signUp, login, googleLogin, forgotPassword, resetPassword, getProfile } from '../controller/authController';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { forgotPasswordLimiter, signUpLimiter, signInLimiter, signUpEmailLimiter, signUpIPBlockCheck } from '../middleware/rateLimitMiddleware';
+import {
+    forgotPwdEmailBlockCheck, forgotPasswordLimiter,
+    signInIPBlockCheck, signInLimiter,
+    signUpIPBlockCheck, signUpEmailLimiter, signUpLimiter
+} from '../middleware/rateLimitMiddleware';
 
 const router = Router();
 
@@ -13,7 +17,7 @@ router.post('/signup', signUpIPBlockCheck, signUpEmailLimiter, signUpLimiter, si
 // @route   POST /api/auth/login
 // @desc    Authenticate user & get a JWT token
 // @access  Public
-router.post('/login', signInLimiter, login);
+router.post('/login', signInIPBlockCheck, signInLimiter, login);
 
 // @route   POST /api/auth/google
 // @desc    Authenticate with Google OAuth token
@@ -23,7 +27,7 @@ router.post('/google', googleLogin);
 // @route   POST /api/auth/forgot-password
 // @desc    Generate reset token and send email
 // @access  Public
-router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
+router.post('/forgot-password', forgotPwdEmailBlockCheck, forgotPasswordLimiter, forgotPassword);
 
 // @route   POST /api/auth/reset-password/:token
 // @desc    Verify token and update password

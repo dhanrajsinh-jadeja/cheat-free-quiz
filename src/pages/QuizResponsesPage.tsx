@@ -14,7 +14,7 @@ interface ResponseData {
     totalMarks: number;
     timeTaken: number;
     submittedAt: string;
-    status: 'passed' | 'failed' | 'completed';
+    status: 'passed' | 'failed' | 'completed' | 'cheated';
 }
 
 const QuizResponsesPage: React.FC = () => {
@@ -277,6 +277,7 @@ const QuizResponsesPage: React.FC = () => {
                                             <option value="all">Any Status</option>
                                             <option value="passed">Passed</option>
                                             <option value="failed">Failed</option>
+                                            <option value="cheated">Cheated/Flagged</option>
                                         </select>
                                         <Filter size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
                                     </div>
@@ -313,12 +314,16 @@ const QuizResponsesPage: React.FC = () => {
                                                         <div className="text-[10px] text-slate-400 font-medium truncate max-w-[200px]">{res.email}</div>
                                                     </td>
                                                     <td className="py-2.5 px-4 text-center">
-                                                        <span className={`text-xs font-black ${res.score >= 70 ? 'text-emerald-600' : res.score >= 40 ? 'text-amber-600' : 'text-rose-600'}`}>
-                                                            {res.score}%
+                                                        <span className={`text-xs font-black ${res.status === 'cheated' ? 'text-red-600' : res.score >= 70 ? 'text-emerald-600' : res.score >= 40 ? 'text-amber-600' : 'text-rose-600'}`}>
+                                                            {res.status === 'cheated' ? '0%' : `${res.score}%`}
                                                         </span>
                                                     </td>
                                                     <td className="py-2.5 px-4 text-center">
-                                                        <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${res.status === 'passed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
+                                                        <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${
+                                                            res.status === 'passed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                                                            res.status === 'cheated' ? 'bg-red-50 text-red-600 border-red-200 shadow-sm' : 
+                                                            'bg-rose-50 text-rose-600 border-rose-100'
+                                                        }`}>
                                                             {res.status}
                                                         </div>
                                                     </td>
@@ -358,7 +363,11 @@ const QuizResponsesPage: React.FC = () => {
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-0.5">
                                                     <h4 className="font-bold text-slate-800 text-xs truncate">{res.userName}</h4>
-                                                    <div className={`px-1 rounded text-[8px] font-black uppercase ${res.status === 'passed' ? 'text-emerald-500 bg-emerald-50' : 'text-rose-500 bg-rose-50'}`}>
+                                                    <div className={`px-1 rounded text-[8px] font-black uppercase ${
+                                                        res.status === 'passed' ? 'text-emerald-500 bg-emerald-50' : 
+                                                        res.status === 'cheated' ? 'text-red-600 bg-red-100 border border-red-200' : 
+                                                        'text-rose-500 bg-rose-50'
+                                                    }`}>
                                                         {res.status}
                                                     </div>
                                                 </div>
@@ -369,8 +378,8 @@ const QuizResponsesPage: React.FC = () => {
                                             </div>
                                             
                                             <div className="flex items-center gap-3">
-                                                <div className={`text-sm font-black ${res.score >= 70 ? 'text-emerald-600' : res.score >= 40 ? 'text-amber-600' : 'text-rose-600'}`}>
-                                                    {res.score}%
+                                                <div className={`text-sm font-black ${res.status === 'cheated' ? 'text-red-600' : res.score >= 70 ? 'text-emerald-600' : res.score >= 40 ? 'text-amber-600' : 'text-rose-600'}`}>
+                                                    {res.status === 'cheated' ? '0%' : `${res.score}%`}
                                                 </div>
                                                 <button 
                                                     onClick={() => navigate(`/quiz/result/${res.id}`)}

@@ -3,6 +3,16 @@ export interface User {
     fullName: string;
     email: string;
     avatar?: string;
+    coverImage?: string;
+    bio?: string;
+    location?: string;
+    website?: string;
+    socialLinks?: {
+        github?: string;
+        linkedin?: string;
+        twitter?: string;
+    };
+    skills?: string[];
     createdAt: string;
 }
 

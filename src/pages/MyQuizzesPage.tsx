@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Filter, MoreVertical, Plus, BookOpen, Clock, CheckCircle, FileText, X, Users, Calendar, Download, Eye, Copy, Share2, Trash2, BarChart2, ListFilter, Loader2, CheckCheck, Check, AlertCircle } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { quizService } from '../services/quizService';
+import { jsPDF } from 'jspdf';
 
 // --- Mock Data ---
 
@@ -139,6 +140,88 @@ const MyQuizzesPage: React.FC = () => {
         document.addEventListener('click', handleClickOutside);
         return () => document.removeEventListener('click', handleClickOutside);
     }, []);
+
+    const [isGeneratingPDF, setIsGeneratingPDF] = useState<string | null>(null);
+
+    const handleDownloadPDF = async (quiz: Quiz) => {
+        setIsGeneratingPDF(quiz.id);
+        try {
+            const fullQuiz = await quizService.getQuiz(quiz.id);
+            const doc = new jsPDF();
+            
+            // --- Header (Simple Word Style) ---
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(22);
+            doc.setFont('helvetica', 'bold');
+            const title = fullQuiz.title.toUpperCase();
+            const titleWidth = doc.getTextWidth(title);
+            doc.text(title, (210 - titleWidth) / 2, 25);
+            
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Category: ${fullQuiz.category || 'General'}  |  Time: ${fullQuiz.timeLimit} Mins  |  Total Marks: ${fullQuiz.totalMarks}`, 20, 35);
+            
+            doc.setLineWidth(0.5);
+            doc.line(20, 38, 190, 38);
+            
+            let currentY = 50;
+            
+            if (fullQuiz.description) {
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'italic');
+                const descLines = doc.splitTextToSize(fullQuiz.description, 170);
+                doc.text(descLines, 20, currentY);
+                currentY += (descLines.length * 6) + 10;
+            }
+            
+            // --- Questions List ---
+            fullQuiz.questions.forEach((q: any, index: number) => {
+                // Check for page break
+                if (currentY > 260) {
+                    doc.addPage();
+                    currentY = 25;
+                }
+                
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'bold');
+                const questionLines = doc.splitTextToSize(`${index + 1}. ${q.text}`, 170);
+                doc.text(questionLines, 20, currentY);
+                currentY += (questionLines.length * 7);
+                
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'normal');
+                if (q.options && q.options.length > 0) {
+                    q.options.forEach((opt: string, optIdx: number) => {
+                        if (currentY > 275) {
+                            doc.addPage();
+                            currentY = 25;
+                        }
+                        const label = String.fromCharCode(65 + optIdx);
+                        doc.text(`${label}) ${opt}`, 25, currentY);
+                        currentY += 7;
+                    });
+                }
+                currentY += 8;
+            });
+            
+            // --- Footer ---
+            const pageCount = (doc as any).internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(9);
+                doc.setTextColor(150, 150, 150);
+                doc.text(`Page ${i} of ${pageCount}`, 190, 285, { align: 'right' });
+            }
+            
+            doc.save(`${fullQuiz.title.replace(/\s+/g, '_')}_Question_Paper.pdf`);
+            showToast("PDF Generated Successfully", "success");
+        } catch (err) {
+            console.error(err);
+            showToast("Failed to generate PDF", "error");
+        } finally {
+            setIsGeneratingPDF(null);
+        }
+    };
 
     // Derived stats
     const totalQuizzes = quizzes.length;
@@ -558,6 +641,14 @@ const MyQuizzesPage: React.FC = () => {
                                                                 </button>
                                                             )}
                                                             <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2" onClick={() => navigate(`/quiz-rules/${quiz.id}`)}><Eye size={15} /> Preview</button>
+                                                            <button 
+                                                                className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2 disabled:opacity-50" 
+                                                                onClick={() => handleDownloadPDF(quiz)}
+                                                                disabled={isGeneratingPDF === quiz.id}
+                                                            >
+                                                                {isGeneratingPDF === quiz.id ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} 
+                                                                Download PDF
+                                                            </button>
                                                             <div className="h-px bg-slate-100 my-1"></div>
                                                             <button className="w-full text-left px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2" onClick={() => handleDeleteQuiz(quiz)}><Trash2 size={15} /> Delete Quiz</button>
                                                         </div>
@@ -600,7 +691,7 @@ const MyQuizzesPage: React.FC = () => {
                                                 </button>
                                                 {/* Dropdown menu */}
                                                 {activeDropdown === quiz.id && (
-                                                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-30 animate-in fade-in zoom-in-95">
+                                                    <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-30 animate-in fade-in slide-in-from-top-2 zoom-in-95">
                                                         <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2" onClick={() => navigate(`/create-quiz?edit=${quiz.id}&duplicate=true`)}><Copy size={15} /> Duplicate Quiz</button>
                                                         {quiz.status === 'published' && (
                                                             <button 
@@ -610,6 +701,14 @@ const MyQuizzesPage: React.FC = () => {
                                                                 <Share2 size={15} /> Share Link
                                                             </button>
                                                         )}
+                                                        <button 
+                                                            className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2 disabled:opacity-50" 
+                                                            onClick={() => handleDownloadPDF(quiz)}
+                                                            disabled={isGeneratingPDF === quiz.id}
+                                                        >
+                                                            {isGeneratingPDF === quiz.id ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} 
+                                                            Download PDF
+                                                        </button>
                                                         <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2" onClick={() => navigate(`/quiz-rules/${quiz.id}`)}><Eye size={15} /> Preview</button>
                                                         <div className="h-px bg-slate-100 my-1"></div>
                                                         <button className="w-full text-left px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2" onClick={() => handleDeleteQuiz(quiz)}><Trash2 size={15} /> Delete Quiz</button>

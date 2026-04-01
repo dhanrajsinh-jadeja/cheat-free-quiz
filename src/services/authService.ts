@@ -135,7 +135,7 @@ export const authService = {
     getProfile: async (): Promise<User> => {
         const response = await apiClient('/auth/profile', {
             method: 'GET',
-            headers: {
+            headers: { 
                 'Content-Type': 'application/json',
             },
         });
@@ -144,6 +144,25 @@ export const authService = {
 
         if (!response.ok) {
             throw new Error(result.message || 'Failed to fetch profile');
+        }
+
+        return result;
+    },
+
+    /**
+     * Update user profile
+     */
+    updateProfile: async (data: any): Promise<{ message: string, user: User }> => {
+        const response = await apiClient('/auth/profile', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || 'Failed to update profile');
         }
 
         return result;

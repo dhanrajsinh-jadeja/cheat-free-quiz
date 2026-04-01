@@ -37,13 +37,13 @@ const ForgotPasswordPage: React.FC = () => {
                     <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center text-green-500">
                         <CheckCircle2 size={40} />
                     </div>
-                    
+
                     <p className="text-text-muted text-center text-[0.95rem] leading-relaxed">
                         Didn't receive the email? Check your spam folder or try again in a few minutes.
                     </p>
 
-                    <Link 
-                        to="/login" 
+                    <Link
+                        to="/login"
                         className="flex items-center gap-2 text-primary hover:underline font-medium transition-all group"
                     >
                         <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
@@ -85,8 +85,8 @@ const ForgotPasswordPage: React.FC = () => {
                         {loading ? <Loader2 className="animate-spin mx-auto" size={20} /> : 'Reset Password'}
                     </Button>
 
-                    <Link 
-                        to="/login" 
+                    <Link
+                        to="/login"
                         className="flex items-center justify-center gap-2 text-text-muted hover:text-primary transition-colors font-medium text-[0.95rem] group"
                     >
                         <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />

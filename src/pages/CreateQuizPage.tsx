@@ -3,12 +3,13 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
     Plus, Trash2, HelpCircle, CheckCircle, Clock, Layout, Copy, X, ExternalLink, Loader2,
     ChevronDown, ChevronRight, ArrowUp, ArrowDown, Eye, Save, Shield, Shuffle,
-    Image as ImageIcon, Code, BookOpen, AlertCircle, Calendar as CalendarIcon
+    Image as ImageIcon, Code, BookOpen, AlertCircle, Calendar as CalendarIcon, Download
 } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import DashboardLayout from '../components/DashboardLayout';
 import { quizService } from '../services/quizService';
 import { CalendarRange } from '../components/CalendarRange';
+import { jsPDF } from 'jspdf';
 
 interface Question {
     id: string;
@@ -382,6 +383,96 @@ const CreateQuizPage: React.FC = () => {
     const totalMarks = questions.reduce((acc, q) => acc + (q.marks || 0), 0);
     const estimatedTime = Math.ceil(questions.reduce((acc, q) => acc + q.timer, 0) / 60);
 
+    // Export PDF (Questions & Options Only)
+    const handleDownloadPDF = () => {
+        try {
+            const doc = new jsPDF();
+            
+            // Header
+            doc.setTextColor(30, 41, 59); // Slate-800
+            doc.setFontSize(22);
+            doc.setFont('helvetica', 'bold');
+            const title = (quizInfo.title || 'Untitled Quiz').toUpperCase();
+            const titleWidth = doc.getTextWidth(title);
+            doc.text(title, (210 - titleWidth) / 2, 25);
+            
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 116, 139); // Slate-500
+            doc.text(`Category: ${quizInfo.category}  |  Time: ${quizInfo.timeLimit} Mins  |  Total Marks: ${totalMarks}`, 20, 35);
+            
+            doc.setLineWidth(0.5);
+            doc.setDrawColor(226, 232, 240); // Slate-200
+            doc.line(20, 38, 190, 38);
+            
+            let currentY = 50;
+            
+            if (quizInfo.description) {
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'italic');
+                doc.setTextColor(71, 85, 105); // Slate-600
+                const descLines = doc.splitTextToSize(quizInfo.description, 170);
+                doc.text(descLines, 20, currentY);
+                currentY += (descLines.length * 6) + 10;
+            }
+            
+            // Questions
+            questions.forEach((q, index) => {
+                // Check page break
+                if (currentY > 260) {
+                    doc.addPage();
+                    currentY = 25;
+                }
+                
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(30, 41, 59);
+                const questionLines = doc.splitTextToSize(`${index + 1}. ${q.text || 'Empty Question'}`, 170);
+                doc.text(questionLines, 20, currentY);
+                currentY += (questionLines.length * 7);
+                
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(51, 65, 85); // Slate-700
+                
+                if (q.options && q.options.length > 0) {
+                    q.options.forEach((opt, optIdx) => {
+                        if (currentY > 275) {
+                            doc.addPage();
+                            currentY = 25;
+                        }
+                        const label = String.fromCharCode(65 + optIdx);
+                        doc.text(`${label}) ${opt || 'Empty Option'}`, 25, currentY);
+                        currentY += 7;
+                    });
+                } else if (['short', 'paragraph', 'code'].includes(q.type)) {
+                    doc.setFont('helvetica', 'italic');
+                    doc.setTextColor(148, 163, 184); // Slate-400
+                    doc.text("[ Blank Space for Answer ]", 25, currentY);
+                    currentY += 15;
+                    doc.line(25, currentY - 5, 185, currentY - 5);
+                }
+                
+                currentY += 8;
+            });
+            
+            // Footer
+            const pageCount = (doc as any).internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(9);
+                doc.setTextColor(150, 150, 150);
+                doc.text(`Page ${i} of ${pageCount}`, 190, 285, { align: 'right' });
+            }
+            
+            doc.save(`${(quizInfo.title || 'Quiz').replace(/\s+/g, '_')}_Paper.pdf`);
+            showToast("PDF Created Successfully", "success");
+        } catch (err) {
+            console.error(err);
+            showToast("Failed to create PDF", "error");
+        }
+    };
+
     const scrollToQuestion = (id: string) => {
         setActiveQuestionId(id);
         document.getElementById(`question-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -410,6 +501,9 @@ const CreateQuizPage: React.FC = () => {
                         <div className="flex flex-1 sm:flex-none justify-end sm:justify-start items-center gap-1 sm:gap-2 shrink-0">
                             <button className="px-2 sm:px-5 py-1.5 sm:py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg sm:rounded-xl font-bold flex items-center justify-center gap-1 sm:gap-2 shadow-[0_2px_4px_rgba(0,0,0,0.02)] transition-colors text-[0.7rem] sm:text-sm whitespace-nowrap" onClick={() => { }} disabled={loading}>
                                 <Eye size={13} className="sm:w-4 sm:h-4" /> <span className="inline">Preview</span>
+                            </button>
+                            <button className="hidden sm:flex px-2 sm:px-5 py-1.5 sm:py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg sm:rounded-xl font-bold items-center justify-center gap-1 sm:gap-2 shadow-[0_2px_4px_rgba(0,0,0,0.02)] transition-colors text-[0.7rem] sm:text-sm whitespace-nowrap" onClick={handleDownloadPDF} disabled={loading}>
+                                <Download size={13} className="sm:w-4 sm:h-4" /> <span className="inline">Download PDF</span>
                             </button>
                             <button className="px-2 sm:px-5 py-1.5 sm:py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg sm:rounded-xl font-bold flex items-center justify-center gap-1 sm:gap-2 shadow-[0_2px_4px_rgba(0,0,0,0.02)] transition-colors text-[0.7rem] sm:text-sm whitespace-nowrap" onClick={() => { }} disabled={loading}>
                                 <Save size={13} className="sm:w-4 sm:h-4" /> <span className="inline">Save</span><span className="hidden sm:inline">&nbsp;Draft</span>

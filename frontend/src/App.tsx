@@ -37,6 +37,7 @@ const getCookie = (name: string): string | undefined => {
 };
 
 function App() {
+    console.log('💡 App.tsx: Rendering App component...');
     useEffect(() => {
         // On app load, proactively verify the session if the hint exists.
         const verifyAuth = async () => {

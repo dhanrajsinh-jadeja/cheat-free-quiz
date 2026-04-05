@@ -10,7 +10,7 @@ export default defineConfig({
         tailwindcss(),
     ],
     build: {
-        outDir: 'dist', // Standard output for Vercel
+        outDir: '../dist', // Standard output for root-level Vercel deployment
     },
     server: {
         proxy: {

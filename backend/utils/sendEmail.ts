@@ -1,15 +1,21 @@
 import nodemailer from 'nodemailer';
 
 const sendEmail = async (to: string, subject: string, text: string, html?: string) => {
-    const emailUser = process.env.EMAIL_USER || 'yourgmail@gmail.com';
-    const emailPass = (process.env.EMAIL_PASS || 'your_app_password').replace(/\s/g, '');
+    const emailUser = process.env.EMAIL_USER;
+    const emailPass = process.env.EMAIL_PASS;
+
+    // If email credentials are not configured, skip sending (don't throw)
+    if (!emailUser || !emailPass) {
+        console.warn('⚠️ Email credentials not configured. Skipping email sending.');
+        return;
+    }
 
     // Create a transporter using Gmail service
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
             user: emailUser,
-            pass: emailPass
+            pass: emailPass.replace(/\s/g, '')
         }
     });
 
@@ -24,8 +30,10 @@ const sendEmail = async (to: string, subject: string, text: string, html?: strin
     try {
         await transporter.sendMail(mailOptions);
     } catch (error) {
-        throw error;
+        console.error('Email sending failed:', error);
+        // Don't throw - user signup should still succeed even if email fails
     }
 };
 
 export default sendEmail;
+

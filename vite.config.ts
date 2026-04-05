@@ -4,9 +4,13 @@ import tailwindcss from '@tailwindcss/vite'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+    base: '/', // Ensures assets are served from the root
     plugins: [
         react(),
         tailwindcss(),
     ],
+    build: {
+        outDir: 'dist', // Standard output for Vercel
+    },
     logLevel: 'info',
 })

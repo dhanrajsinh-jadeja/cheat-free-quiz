@@ -55,7 +55,7 @@ const SignInPage: React.FC = () => {
         } catch (err: any) {
             setError(err.message || 'Invalid credentials');
             if (err.status === 429) {
-                const blockTime = Date.now() + 30 * 60 * 1000; // 30 minutes
+                const blockTime = Date.now() + 0.5 * 1000; // 30 seconds
                 setBlockedUntil(blockTime);
                 localStorage.setItem('signin_blocked_until', blockTime.toString());
             }

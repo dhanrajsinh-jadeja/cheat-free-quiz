@@ -107,29 +107,18 @@ const MyQuizzesPage: React.FC = () => {
         const fetchResults = async () => {
             setIsResultsLoading(true);
             try {
-                const token = localStorage.getItem('token');
-                if (!token) return;
-
-                const response = await fetch('http://localhost:5000/api/quiz/stats/user', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    const formattedResults: AttemptedQuiz[] = data.attemptHistory.map((a: any) => ({
-                        id: a.id,
-                        quizTitle: a.title,
-                        category: a.category || 'Uncategorized',
-                        score: a.score,
-                        totalMarks: a.totalMarks,
-                        timeTaken: 0, // Not provided by this endpoint currently
-                        submittedAt: new Date(a.date).toLocaleString(),
-                        status: a.isPassed ? 'passed' : 'failed'
-                    }));
-                    setAttemptedQuizzes(formattedResults);
-                }
+                const data = await quizService.getUserStats();
+                const formattedResults: AttemptedQuiz[] = data.attemptHistory.map((a: any) => ({
+                    id: a.id,
+                    quizTitle: a.title,
+                    category: a.category || 'Uncategorized',
+                    score: a.score,
+                    totalMarks: a.totalMarks,
+                    timeTaken: 0, // Not provided by this endpoint currently
+                    submittedAt: new Date(a.date).toLocaleString(),
+                    status: a.isPassed ? 'passed' : 'failed'
+                }));
+                setAttemptedQuizzes(formattedResults);
             } catch (error) {
                 // Error handled silently
             } finally {

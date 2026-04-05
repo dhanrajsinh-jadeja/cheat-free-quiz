@@ -11,14 +11,23 @@ import errorMiddleware from './middleware/errorMiddleware';
 // Load environment variables from the .env file into process.env
 dotenv.config();
 
+// 🛡️ Strict Environment Variable Validation
+const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'FRONTEND_URL', 'GOOGLE_CLIENT_ID'];
+const missingEnvVars = requiredEnvVars.filter(v => !process.env[v]);
+
+if (missingEnvVars.length > 0) {
+    console.error(`❌ CRITICAL ERROR: Missing environment variables: ${missingEnvVars.join(', ')}`);
+    console.error('Please ensure these are set in your .env file or Vercel dashboard.');
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+        process.exit(1);
+    }
+}
+
 // Initialize the Express application
 const app = express();
 
-// Define the port the server will run on (falls back to 5000 if not in .env)
 const PORT = process.env.PORT || 5000;
-
-// Define the MongoDB connection string (falls back to local db if not in .env)
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quiz-app';
+const MONGODB_URI = process.env.MONGODB_URI!;
 
 import { apiGlobalLimiter } from './middleware/rateLimitMiddleware';
 import { csrfProtection } from './middleware/csrfMiddleware';
@@ -76,9 +85,11 @@ app.use('/api', (req, res, next) => {
 // Trust proxy is required for express-rate-limit to correctly identify IPs
 app.set('trust proxy', 1);
 
-// Enable CORS and expose Content-Disposition so the frontend can read the CSV filename
+// Enable CORS strictly bound to the frontend URL
 const corsOptions = {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: process.env.NODE_ENV === 'production' 
+        ? process.env.FRONTEND_URL 
+        : (process.env.FRONTEND_URL || 'http://localhost:5173'),
     exposedHeaders: ['Content-Disposition'],
     credentials: true
 };
@@ -110,12 +121,16 @@ mongoose
     .then(() => {
         console.log('✅ Connected to MongoDB');
         // Once connected to the database, start starting the Express server to listen for requests
-        app.listen(PORT, () => {
-            console.log(`🚀 Server running on http://localhost:${PORT}`);
-        });
+        if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+            app.listen(PORT, () => {
+                console.log(`🚀 Server running on http://localhost:${PORT}`);
+            });
+        }
     })
     .catch((err) => {
         // If the database connection fails, log the error and exit the process
         console.error('❌ MongoDB connection error:', err);
         process.exit(1);
     });
+
+export default app;

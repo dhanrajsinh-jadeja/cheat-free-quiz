@@ -15,7 +15,7 @@ import { generateCsrfToken } from '../middleware/csrfMiddleware';
 // Initialize Google OAuth client with your specific Client ID
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 // Fetch the secret key used to sign JWT tokens. If not found in .env, use a fallback string
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-123';
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 /**
  * Handle Google Login/Signup
@@ -355,7 +355,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
         user.resetPasswordExpire = new Date(Date.now() + 5 * 60 * 1000);
         await user.save();
 
-        const resetUrl = `http://localhost:5173/reset-password/${resetToken}`;
+        const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${resetToken}`;
         const message = `Click this link to reset password: ${resetUrl}`;
 
         try {

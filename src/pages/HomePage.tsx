@@ -4,13 +4,15 @@ import { motion, useScroll, useTransform } from 'framer-motion';
 import { 
   Timer, BarChart3, 
   ShieldAlert, Lock, 
-   FileText, Globe, 
-  Layout, ArrowRight, Github, Twitter, Linkedin, Facebook, Instagram,
+  FileText, Globe, 
+  Layout, ArrowRight,
   ChevronRight, Play, User as UserIcon
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { User } from '../types/user';
+import Footer from '../components/Footer';
+
 
 const HomePage: React.FC = () => {
     const { scrollYProgress } = useScroll();
@@ -437,71 +439,9 @@ const HomePage: React.FC = () => {
                 </div>
             </section>
 
-            {/* 📌 MODERN FOOTER */}
-            <footer className="bg-text-dark pt-24 pb-12 px-6 text-white border-t border-white/5">
-                <div className="max-w-7xl mx-auto">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-12 lg:gap-8 mb-20">
-                        {/* Brand Column */}
-                        <div className="col-span-2 lg:col-span-2 space-y-8">
-                            <div className="flex items-center gap-2">
-                                <img src="/logo.png" alt="QuizHub Logo" className="w-8 h-8 object-contain" />
-                                <span className="text-xl font-black tracking-tighter">Quiz<span className="text-primary">Hub</span></span>
-                            </div>
-                            <p className="text-slate-400 text-sm leading-relaxed max-w-xs font-medium">
-                                The world's most secure and advanced quiz platform for institutions, creators, and students. Redefining digital integrity.
-                            </p>
-                            <div className="flex items-center gap-4">
-                                {[Github, Twitter, Linkedin, Facebook, Instagram].map((Icon, i) => (
-                                    <a key={i} href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 text-slate-400 hover:text-primary hover:bg-white/10 transition-all">
-                                        <Icon size={18} />
-                                    </a>
-                                ))}
-                            </div>
-                        </div>
+            {/* 📌 MODERN FOOTER (Docker Style) */}
+            <Footer />
 
-                        {/* Company Column */}
-                        <div className="space-y-6">
-                            <h4 className="text-xs font-black uppercase tracking-widest text-primary">Company</h4>
-                            <ul className="space-y-4">
-                                {['About Us', 'Careers', 'Media Kit', 'Blog', 'Contact'].map(link => (
-                                    <li key={link}><a href="#" className="text-sm text-slate-400 hover:text-white transition-colors">{link}</a></li>
-                                ))}
-                            </ul>
-                        </div>
-
-                        {/* Resources Column */}
-                        <div className="space-y-6">
-                            <h4 className="text-xs font-black uppercase tracking-widest text-primary">Resources</h4>
-                            <ul className="space-y-4">
-                                {['Documentation', 'API Reference', 'Integrations', 'Security', 'Uptime'].map(link => (
-                                    <li key={link}><a href="#" className="text-sm text-slate-400 hover:text-white transition-colors">{link}</a></li>
-                                ))}
-                            </ul>
-                        </div>
-
-                        {/* Newsletter Column */}
-                        <div className="col-span-2 lg:col-span-1 space-y-6">
-                            <h4 className="text-xs font-black uppercase tracking-widest text-primary">Stay Updated</h4>
-                            <p className="text-xs text-slate-500 font-medium">Get the latest feature updates and integrity news.</p>
-                            <div className="relative">
-                                <input type="email" placeholder="email@example.com" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-hidden focus:border-primary transition-all pr-12" />
-                                <button className="absolute right-2 top-2 p-1.5 bg-primary rounded-lg text-white hover:bg-primary-hover transition-colors">
-                                    <ArrowRight size={16} />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
-                        <p className="text-slate-500 text-xs font-medium">© 2026 QuizHub Global Inc. All rights reserved.</p>
-                        <div className="flex items-center gap-8">
-                            <a href="#" className="text-xs text-slate-500 hover:text-white transition-colors">Privacy Policy</a>
-                            <a href="#" className="text-xs text-slate-500 hover:text-white transition-colors">Terms of Service</a>
-                            <a href="#" className="text-xs text-slate-500 hover:text-white transition-colors">Cookie Settings</a>
-                        </div>
-                    </div>
-                </div>
-            </footer>
 
         </div>
     );

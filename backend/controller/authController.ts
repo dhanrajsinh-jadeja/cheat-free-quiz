@@ -12,18 +12,22 @@ import { generateCsrfToken } from '../middleware/csrfMiddleware';
 
 
 
-// Initialize Google OAuth client with your specific Client ID
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+// Initialize Google OAuth client only if Client ID is provided
+const client = process.env.GOOGLE_CLIENT_ID ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID) : null;
 // Fetch the secret key used to sign JWT tokens. If not found in .env, use a fallback string
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 /**
  * Handle Google Login/Signup
- * Verifies the Google credential ID token sent from the frontend and either logs the user in or signs them up.
  */
 export const googleLogin = async (req: Request, res: Response): Promise<void> => {
     try {
         const { credential } = req.body;
+
+        if (!client) {
+            res.status(400).json({ message: 'Google authentication is currently disabled on this server.' });
+            return;
+        }
 
         // Verify the ID token using the Google Auth Library using our Client ID
         const ticket = await client.verifyIdToken({

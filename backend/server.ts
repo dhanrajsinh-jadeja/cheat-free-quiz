@@ -9,7 +9,7 @@ import quizRoutes from './routes/quizRoutes';
 import errorMiddleware from './middleware/errorMiddleware';
 
 // 🛡️ Strict Environment Variable Validation
-const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'FRONTEND_URL', 'GOOGLE_CLIENT_ID', 'EMAIL_USER', 'EMAIL_PASS'];
+const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'FRONTEND_URL', 'EMAIL_USER', 'EMAIL_PASS'];
 const missingEnvVars = requiredEnvVars.filter(v => !process.env[v]);
 
 if (missingEnvVars.length > 0) {

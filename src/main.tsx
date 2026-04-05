@@ -8,14 +8,23 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-        {GOOGLE_CLIENT_ID ? (
-            <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+console.log('🚀 main.tsx: Loading application...');
+console.log('🔑 GOOGLE_CLIENT_ID detected:', GOOGLE_CLIENT_ID ? 'YES' : 'NO');
+
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+    console.error('❌ CRITICAL: #root element not found in DOM!');
+} else {
+    console.log('✅ Found #root element, mounting React...');
+    ReactDOM.createRoot(rootElement).render(
+        <React.StrictMode>
+            {GOOGLE_CLIENT_ID ? (
+                <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                    <App />
+                </GoogleOAuthProvider>
+            ) : (
                 <App />
-            </GoogleOAuthProvider>
-        ) : (
-            <App />
-        )}
-    </React.StrictMode>,
-)
+            )}
+        </React.StrictMode>,
+    );
+}

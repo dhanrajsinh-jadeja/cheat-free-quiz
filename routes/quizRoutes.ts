@@ -1,6 +1,12 @@
 import express from 'express';
-import { createQuiz, getQuiz, publishQuiz, getMyQuizzes, getUserStats, deleteQuiz, deleteQuizzesBatch, getAttemptStatus, updateQuiz, submitQuiz, getQuizAnalytics, getAttemptDetails, exportQuizResponses } from '../controller/quizController';
+import { 
+    createQuiz, getQuiz, publishQuiz, getMyQuizzes, getUserStats, deleteQuiz, 
+    deleteQuizzesBatch, getAttemptStatus, updateQuiz, submitQuiz, 
+    getQuizAnalytics, getAttemptDetails, exportQuizResponses,
+    expireQuiz, restartQuiz
+} from '../controller/quizController';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { quizActionLimiter } from '../middleware/rateLimitMiddleware';
 
 const router = express.Router();
 
@@ -13,7 +19,7 @@ router.get('/stats/user', authMiddleware, getUserStats);
 // @route   POST /api/quiz/
 // @desc    Create a new quiz draft
 // @access  Private (Requires JWT)
-router.post('/', authMiddleware, createQuiz);
+router.post('/', authMiddleware, quizActionLimiter, createQuiz);
 
 // @route   POST /api/quiz/delete-batch
 // @desc    Bulk delete quizzes
@@ -43,12 +49,12 @@ router.get('/:id/attempt-status', authMiddleware, getAttemptStatus);
 // @route   POST /api/quiz/:id/publish
 // @desc    Publish a drafted quiz, making it available to students and generating a link
 // @access  Private (Requires JWT, must be the creator of the quiz)
-router.post('/:id/publish', authMiddleware, publishQuiz);
+router.post('/:id/publish', authMiddleware, quizActionLimiter, publishQuiz);
 
 // @route   POST /api/quiz/:id/submit
 // @desc    Submit quiz answers and calculate score
 // @access  Private (Requires JWT)
-router.post('/:id/submit', authMiddleware, submitQuiz);
+router.post('/:id/submit', authMiddleware, quizActionLimiter, submitQuiz);
 
 // @route   GET /api/quiz/:id/submit (DEFENSIVE)
 // @desc    Prevent "Cannot GET" errors by handling invalid direct access
@@ -58,6 +64,16 @@ router.get('/:id/submit', authMiddleware, (_req: any, res: any) => {
         error: 'Method Not Allowed (405)'
     });
 });
+
+// @route   PATCH /api/quiz/:id/expire
+// @desc    Manually expire a quiz link
+// @access  Private (Requires JWT, must creator)
+router.patch('/:id/expire', authMiddleware, expireQuiz);
+
+// @route   PATCH /api/quiz/:id/restart
+// @desc    Re-activate an expired quiz link with a new duration
+// @access  Private (Requires JWT, must creator)
+router.patch('/:id/restart', authMiddleware, restartQuiz);
 
 // @route   GET /api/quiz/:id
 // @desc    Fetch a specific quiz by its ID
@@ -73,6 +89,5 @@ router.delete('/:id', authMiddleware, deleteQuiz);
 // @desc    Update a quiz
 // @access  Private (Requires JWT, must be the creator)
 router.patch('/:id', authMiddleware, updateQuiz);
-
 
 export default router;

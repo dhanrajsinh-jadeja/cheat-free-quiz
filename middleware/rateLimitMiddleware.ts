@@ -14,7 +14,7 @@ const setCustomBlock = async (key: string, blockDurationMs: number) => {
                 { _id: key as any },
                 { 
                     $set: { 
-                        hits: 100, // arbitrary high number to represent blocked state
+                        hits: 100, // represent blocked state
                         expiresAt: new Date(Date.now() + blockDurationMs) 
                     } 
                 },
@@ -33,16 +33,40 @@ const checkCustomBlock = async (key: string, _req: Request, res: Response, next:
         if (db) {
             const blockDoc = await db.collection('rateLimits').findOne({ _id: key as any });
             if (blockDoc && new Date(blockDoc.expiresAt) > new Date()) {
-                return res.status(429).json({ message });
+                // Return a generic error structure to avoid clues
+                return res.status(429).json({ 
+                    status: 'error',
+                    message,
+                    code: 'LIMIT_EXCEEDED' 
+                });
             }
         }
     } catch (err) {}
     next();
 };
 
+// --- Standard Settings for "Discrete Mode" ---
+const discreteSettings = {
+    standardHeaders: false, // Hide X-RateLimit-Limit and X-RateLimit-Remaining
+    legacyHeaders: false,   // Hide X-RateLimit-Reset
+    validate: { xForwardedForHeader: false },
+};
+
+// ─── 0. Global API Limiter ───────────────────────────────────────────────────
+// Baseline protection for all /api endpoints
+export const apiGlobalLimiter = rateLimit({
+    ...discreteSettings,
+    windowMs: 15 * 60 * 1000, // 15 mins
+    max: 200, // 100 requests per 15 mins
+    message: { 
+        status: 'error',
+        message: 'System is currently busy. Please try again later.',
+        code: 'BUSY'
+    },
+});
+
 // ─── 1. Forgot Password Limiter ───────────────────────────────────────────────
-// 5 times in 15 minutes for each email. after that user stop to do reset password for 30 seconds
-const FORGOT_PWD_BLOCK_MSG = 'Too many password reset requests. Please wait 30 seconds before trying again.';
+const FORGOT_PWD_BLOCK_MSG = 'Security block: too many requests. Please wait 30 seconds.';
 
 export const forgotPwdEmailBlockCheck = (req: Request, res: Response, next: NextFunction) => {
     if (!req.body.email) return next();
@@ -51,6 +75,7 @@ export const forgotPwdEmailBlockCheck = (req: Request, res: Response, next: Next
 };
 
 export const forgotPasswordLimiter = rateLimit({
+    ...discreteSettings,
     store: new MongoDBStore({
         uri: MONGODB_URI,
         collectionName: 'rateLimits',
@@ -63,23 +88,23 @@ export const forgotPasswordLimiter = rateLimit({
         if (req.body.email) {
             await setCustomBlock(`forgot_pwd_block:${req.body.email.toLowerCase()}`, 30 * 1000);
         }
-        res.status(options.statusCode).json({ message: FORGOT_PWD_BLOCK_MSG });
+        res.status(options.statusCode).json({ 
+            status: 'error',
+            message: FORGOT_PWD_BLOCK_MSG,
+            code: 'AUTH_TIMEOUT'
+        });
     },
-    message: { message: FORGOT_PWD_BLOCK_MSG },
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: { xForwardedForHeader: false },
 });
 
 // ─── 2. Sign In Limiter ───────────────────────────────────────────────────────
-// 10 times in 1 minute then it will stopped for signin for 30 seconds by it ip.
-const SIGNIN_BLOCK_MSG = 'Too many failed login attempts. Your device is temporarily blocked for 30 seconds.';
+const SIGNIN_BLOCK_MSG = 'Too many failed attempts. Access restricted for 30 seconds.';
 
 export const signInIPBlockCheck = (req: Request, res: Response, next: NextFunction) => {
     checkCustomBlock(`signin_ip_block:${ipKeyGenerator(req.ip || '')}`, req, res, next, SIGNIN_BLOCK_MSG);
 };
 
 export const signInLimiter = rateLimit({
+    ...discreteSettings,
     store: new MongoDBStore({
         uri: MONGODB_URI,
         collectionName: 'rateLimits',
@@ -88,20 +113,20 @@ export const signInLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minute
     max: 10,
     keyGenerator: (req) => `signin_limit:${req.body.email?.toLowerCase() || ipKeyGenerator(req.ip || '')}`,
-    skipSuccessfulRequests: true, // Only count failed logins
+    skipSuccessfulRequests: true,
     handler: async (req, res, _next, options) => {
         await setCustomBlock(`signin_ip_block:${ipKeyGenerator(req.ip || '')}`, 30 * 1000);
-        res.status(options.statusCode).json({ message: SIGNIN_BLOCK_MSG });
+        res.status(options.statusCode).json({ 
+            status: 'error',
+            message: SIGNIN_BLOCK_MSG,
+            code: 'SECURITY_BLOCK'
+        });
     },
-    message: { message: SIGNIN_BLOCK_MSG },
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: { xForwardedForHeader: false },
 });
 
 // ─── 3. Sign Up Generic IP Limiter ────────────────────────────────────────────
-// only 5 accounts can be create in 3 hours from any devices (per IP).
 export const signUpLimiter = rateLimit({
+    ...discreteSettings,
     store: new MongoDBStore({
         uri: MONGODB_URI,
         collectionName: 'rateLimits',
@@ -111,22 +136,21 @@ export const signUpLimiter = rateLimit({
     max: 5,
     keyGenerator: (req) => `signup_limit_ip:${ipKeyGenerator(req.ip || '')}`,
     message: {
-        message: 'You have reached the limit for account creation from this device. Please try again in 3 hours.'
+        status: 'error',
+        message: 'Registration limit reached. Please try again in 3 hours.',
+        code: 'REG_LIMIT'
     },
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: { xForwardedForHeader: false },
 });
 
 // ─── 4. Sign Up Email Limiter (Existing Email Spam) ───────────────────────────
-// more then 10 times in 2 minutes then signup page should be blocked for 30 second
-const SIGNUP_BLOCK_MSG = 'Too many signup attempts with existing accounts. Your device is blocked for 30 seconds.';
+const SIGNUP_BLOCK_MSG = 'Too many registration attempts. System restricted for 30 seconds.';
 
 export const signUpIPBlockCheck = (req: Request, res: Response, next: NextFunction) => {
     checkCustomBlock(`signup_ip_block:${ipKeyGenerator(req.ip || '')}`, req, res, next, SIGNUP_BLOCK_MSG);
 };
 
 export const signUpEmailLimiter = rateLimit({
+    ...discreteSettings,
     store: new MongoDBStore({
         uri: MONGODB_URI,
         collectionName: 'rateLimits',
@@ -138,10 +162,24 @@ export const signUpEmailLimiter = rateLimit({
     skipSuccessfulRequests: true,
     handler: async (req, res, _next, options) => {
         await setCustomBlock(`signup_ip_block:${ipKeyGenerator(req.ip || '')}`, 30 * 1000);
-        res.status(options.statusCode).json({ message: SIGNUP_BLOCK_MSG });
+        res.status(options.statusCode).json({ 
+            status: 'error',
+            message: SIGNUP_BLOCK_MSG,
+            code: 'SYSTEM_PROTECTION'
+        });
     },
-    message: { message: SIGNUP_BLOCK_MSG },
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: { xForwardedForHeader: false },
 });
+
+// ─── 5. Quiz Action Limiter ──────────────────────────────────────────────────
+// Prevent automated quiz creation or submission spam
+export const quizActionLimiter = rateLimit({
+    ...discreteSettings,
+    windowMs: 60 * 1000, // 1 minute
+    max: 5, // max 5 sensitive quiz actions per minute
+    message: {
+        status: 'error',
+        message: 'Action rejected: too many requests. Please wait a moment.',
+        code: 'ACTION_LIMIT'
+    },
+});
+

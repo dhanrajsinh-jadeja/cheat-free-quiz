@@ -18,12 +18,16 @@ export interface AuthRequest extends Request {
  * verifies it, and attaches the decoded user payload to the request object.
  */
 export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
-    // Look for the "Authorization: Bearer <token>" header
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    // 🛡️ Prioritize the secure HttpOnly cookie over the Authorization header
+    let token = (req as any).cookies?.['jwt'];
+    
+    if (!token) {
+        token = req.header('Authorization')?.replace('Bearer ', '');
+    }
 
     // If no token is provided, reject the request
     if (!token) {
-        return res.status(401).json({ message: 'No token, authorization denied' });
+        return res.status(401).json({ message: 'Authentication required: session not found or expired' });
     }
 
     try {

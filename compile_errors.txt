@@ -1,1 +1,0 @@
-src/components/DashboardLayout.tsx(176,104): error TS2339: Property 'role' does not exist on type 'User'.

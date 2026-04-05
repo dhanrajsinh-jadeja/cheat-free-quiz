@@ -29,6 +29,8 @@ const QuizTakePage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
     const [proctoringViolations, setProctoringViolations] = useState(0);
+    const [warningModalOpen, setWarningModalOpen] = useState(false);
+    const [isFullscreenState, setIsFullscreenState] = useState(false);
     const [startTime, setStartTime] = useState<string | null>(null);
     const [isPreviewMode, setIsPreviewMode] = useState(false);
     const [previewScore, setPreviewScore] = useState<any>(null);
@@ -59,8 +61,16 @@ const QuizTakePage: React.FC = () => {
                 setQuizInfo(data as any);
                 setTimeLeft(data.timeLimit * 60);
 
-                if (profile && data.creator === (profile as any)._id) {
+                const isCreator = profile && data.creator === (profile as any)._id;
+                if (isCreator) {
                     setIsPreviewMode(true);
+                }
+
+                // Check for Future Quiz (Protect against direct URL access)
+                if (data.startDate && new Date() < new Date(data.startDate) && !isCreator) {
+                    setError(`This quiz is scheduled to start at ${new Date(data.startDate).toLocaleString()}. Please wait until then.`);
+                    setLoading(false);
+                    return;
                 }
 
                 // Implement Shuffling Logic while preserving original indices
@@ -97,6 +107,12 @@ const QuizTakePage: React.FC = () => {
         if (submissionLock.current || isSubmitted || !id) return;
         submissionLock.current = true;
         setIsSubmitted(true);
+        setWarningModalOpen(false);
+
+        // Exit fullscreen on submit
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        }
 
         try {
             // Map answers to backend format using original indices
@@ -120,7 +136,7 @@ const QuizTakePage: React.FC = () => {
 
             // Navigate to Dashboard after short delay
             // But IF it's a violation, we don't auto-redirect, forcing them to see the 0 marks warning
-            if (!showCheatWarning) {
+            if (!showCheatWarning && proctoringViolations < 2) {
                 setTimeout(() => {
                     if (!submissionLock.current) return; // Case where they might have clicked 'View Results' already
                     if (!window.location.pathname.includes('/quiz/take')) return;
@@ -136,32 +152,87 @@ const QuizTakePage: React.FC = () => {
         }
     }, [isSubmitted, id, questions, answers, proctoringViolations, startTime, navigate, showCheatWarning]);
 
-    // Proctoring Logic
-    useEffect(() => {
-        const handleVisibilityChange = () => {
-            if (document.hidden && !isSubmitted && questions.length > 0) {
-                setProctoringViolations(prev => prev + 1);
+    // Proctoring Logic - Strike System
+    const handleViolation = useCallback(() => {
+        if (isSubmitted || questions.length === 0) return;
+
+        setProctoringViolations(prev => {
+            const newViolations = prev + 1;
+            if (newViolations === 1) {
+                // First Breach: Warning Modal One Chance
+                setWarningModalOpen(true);
+            } else if (newViolations >= 2) {
+                // Second Breach: Immediate Submission
                 setShowCheatWarning(true);
                 handleSubmit();
+            }
+            return newViolations;
+        });
+    }, [isSubmitted, questions.length, handleSubmit]);
+
+    const enterFullscreen = () => {
+        const element = document.documentElement;
+        if (element.requestFullscreen) {
+            element.requestFullscreen().catch(() => {
+                setError("Fullscreen is mandatory for this exam. Please check your browser settings.");
+            });
+        }
+    };
+
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                handleViolation();
             }
         };
 
         const handleBlur = () => {
-            if (!isSubmitted && questions.length > 0) {
-                setProctoringViolations(prev => prev + 1);
-                setShowCheatWarning(true);
-                handleSubmit();
+            handleViolation();
+        };
+
+        const handleFullscreenChange = () => {
+            const isFs = !!document.fullscreenElement;
+            setIsFullscreenState(isFs);
+            if (!isFs && !isSubmitted && questions.length > 0) {
+                handleViolation();
             }
+        };
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Block PrintScreen (SysRq), Ctrl+C, Ctrl+V, F12, Ctrl+Shift+I, Ctrl+U
+            const prohibited = [
+                'PrintScreen', 'F12', 
+                (e.ctrlKey && e.key === 'c'),
+                (e.ctrlKey && e.key === 'v'),
+                (e.ctrlKey && e.key === 'u'),
+                (e.ctrlKey && e.shiftKey && e.key === 'I'),
+                (e.ctrlKey && e.shiftKey && e.key === 'J'),
+                (e.ctrlKey && e.shiftKey && e.key === 'C')
+            ];
+
+            if (prohibited.some(p => typeof p === 'boolean' ? p : e.key === p)) {
+                e.preventDefault();
+                handleViolation();
+                return false;
+            }
+        };
+
+        const handleContextMenu = (e: MouseEvent) => {
+            e.preventDefault();
+            return false;
         };
 
         window.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('blur', handleBlur);
+        window.addEventListener('fullscreenchange', handleFullscreenChange);
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('contextmenu', handleContextMenu);
 
         // 🛑 Prevent Refresh/Close Warning
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
             if (!isSubmitted && questions.length > 0) {
                 e.preventDefault();
-                e.returnValue = "You have an active quiz session. Leaving will auto-submit your current progress.";
+                e.returnValue = "Active quiz session. Leaving will auto-submit progress.";
             }
         };
         window.addEventListener('beforeunload', handleBeforeUnload);
@@ -175,10 +246,15 @@ const QuizTakePage: React.FC = () => {
         return () => {
             window.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('blur', handleBlur);
+            window.removeEventListener('fullscreenchange', handleFullscreenChange);
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('contextmenu', handleContextMenu);
             window.removeEventListener('beforeunload', handleBeforeUnload);
             window.removeEventListener('popstate', handlePopState);
         };
-    }, [handleSubmit, isSubmitted, questions.length]);
+    }, [handleViolation, isSubmitted, questions.length]);
+
+
 
     // Timer Logic
     useEffect(() => {
@@ -484,7 +560,7 @@ const QuizTakePage: React.FC = () => {
                 </div>
 
                 {/* Question Spotlight */}
-                <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 md:p-12 lg:p-20 overflow-y-auto">
+                <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 md:p-12 lg:p-20 overflow-y-auto select-none">
                     <div className="max-w-4xl w-full my-auto">
                         {questions.length > 0 && currentQuestion ? (
                             <div className="bg-white rounded-[40px] p-8 md:p-16 border border-border-color shadow-xl animate-in slide-in-from-bottom-6 fade-in duration-700">
@@ -624,6 +700,52 @@ const QuizTakePage: React.FC = () => {
                     background: #cbd5e1;
                 }
             `}</style>
+            {/* Warning Modal - The "One Chance" Strike */}
+            {warningModalOpen && !isSubmitted && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[40px] p-8 md:p-12 max-w-[500px] w-full text-center border border-rose-100 shadow-2xl animate-in zoom-in-95 duration-500">
+                        <div className="w-24 h-24 bg-rose-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-8 rotate-12 shadow-xl shadow-rose-500/20">
+                            <ShieldAlert size={48} />
+                        </div>
+                        <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tight uppercase">Warning: Violation Detected</h3>
+                        <p className="text-slate-500 font-bold mb-8 leading-relaxed">
+                            A security breach was detected (tab switch, minimization, or restricted action). 
+                            <span className="block mt-4 text-rose-600">This is your ONLY warning. A second violation will result in an immediate automatic submission with 0 marks.</span>
+                        </p>
+                        <button
+                            onClick={() => {
+                                setWarningModalOpen(false);
+                                if (!document.fullscreenElement) enterFullscreen();
+                            }}
+                            className="w-full bg-slate-950 text-white py-5 font-black rounded-2xl hover:bg-black active:scale-[0.98] transition-all duration-300 shadow-xl"
+                        >
+                            RE-ENTER EXAM & CONTINUE
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Entry Overlay - Mandatory Fullscreen */}
+            {!isFullscreenState && !isSubmitted && questions.length > 0 && !warningModalOpen && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-white animate-in fade-in duration-500">
+                    <div className="max-w-md w-full text-center">
+                        <div className="w-20 h-20 bg-indigo-600 text-white rounded-[28px] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-indigo-200">
+                            <Monitor size={36} />
+                        </div>
+                        <h2 className="text-3xl font-black text-slate-900 mb-4">Start Quiz</h2>
+                        <p className="text-slate-500 font-bold mb-10 leading-relaxed">
+                            To ensure exam integrity, this quiz must be taken in Fullscreen Mode. Minimizing the window or switching tabs will be recorded as a violation.
+                        </p>
+                        <button
+                            onClick={enterFullscreen}
+                            className="w-full bg-indigo-600 text-white py-6 rounded-3xl font-black text-lg hover:bg-indigo-700 active:scale-[0.95] transition-all shadow-2xl shadow-indigo-200 group"
+                        >
+                            START QUIZ NOW
+                            <ChevronRight size={24} className="inline ml-2 group-hover:translate-x-1 transition-transform" />
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -58,6 +58,14 @@ const MyQuizzesPage: React.FC = () => {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isBulkDelete, setIsBulkDelete] = useState(false);
 
+    // Expire/Restart Modal State
+    const [isExpireModalOpen, setIsExpireModalOpen] = useState(false);
+    const [quizToExpire, setQuizToExpire] = useState<Quiz | null>(null);
+    const [isRestartModalOpen, setIsRestartModalOpen] = useState(false);
+    const [quizToRestart, setQuizToRestart] = useState<Quiz | null>(null);
+    const [newEndDate, setNewEndDate] = useState('');
+    const [isProcessingAction, setIsProcessingAction] = useState(false);
+
     // Fetch user quizzes
     useEffect(() => {
         const fetchQuizzes = async () => {
@@ -314,6 +322,60 @@ const MyQuizzesPage: React.FC = () => {
             showToast("Failed to delete", "error");
         } finally {
             setIsDeleting(false);
+        }
+    };
+
+    const handleExpireQuiz = (quiz: Quiz) => {
+        setQuizToExpire(quiz);
+        setIsExpireModalOpen(true);
+    };
+
+    const confirmExpire = async () => {
+        if (!quizToExpire) return;
+        setIsProcessingAction(true);
+        try {
+            await quizService.expireQuiz(quizToExpire.id);
+            setQuizzes(prev => prev.map(q => 
+                q.id === quizToExpire.id 
+                ? { ...q, endDate: new Date().toISOString() } 
+                : q
+            ));
+            showToast("Quiz link expired successfully", "success");
+            setIsExpireModalOpen(false);
+            setQuizToExpire(null);
+        } catch (error) {
+            showToast("Failed to expire quiz", "error");
+        } finally {
+            setIsProcessingAction(false);
+        }
+    };
+
+    const handleRestartQuiz = (quiz: Quiz) => {
+        setQuizToRestart(quiz);
+        // Default to 7 days from now
+        const defaultDate = new Date();
+        defaultDate.setDate(defaultDate.getDate() + 7);
+        setNewEndDate(defaultDate.toISOString().split('T')[0] + 'T23:59');
+        setIsRestartModalOpen(true);
+    };
+
+    const confirmRestart = async () => {
+        if (!quizToRestart || !newEndDate) return;
+        setIsProcessingAction(true);
+        try {
+            await quizService.restartQuiz(quizToRestart.id, new Date(newEndDate));
+            setQuizzes(prev => prev.map(q => 
+                q.id === quizToRestart.id 
+                ? { ...q, endDate: new Date(newEndDate).toISOString(), status: 'published' } 
+                : q
+            ));
+            showToast("Quiz restarted successfully!", "success");
+            setIsRestartModalOpen(false);
+            setQuizToRestart(null);
+        } catch (error) {
+            showToast("Failed to restart quiz", "error");
+        } finally {
+            setIsProcessingAction(false);
         }
     };
 
@@ -640,7 +702,29 @@ const MyQuizzesPage: React.FC = () => {
                                                                     <Share2 size={15} /> Share Link
                                                                 </button>
                                                             )}
-                                                            <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2" onClick={() => navigate(`/quiz-rules/${quiz.id}`)}><Eye size={15} /> Preview</button>
+                                                             <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2" onClick={() => navigate(`/quiz-rules/${quiz.id}`)}><Eye size={15} /> Preview</button>
+                                                            
+                                                            {/* Manual Expiration/Restart Options */}
+                                                            {quiz.status === 'published' && (
+                                                                <>
+                                                                    {!isQuizExpired(quiz) ? (
+                                                                        <button 
+                                                                            className="w-full text-left px-4 py-2.5 text-sm font-medium text-amber-600 hover:bg-amber-50 flex items-center gap-2" 
+                                                                            onClick={() => handleExpireQuiz(quiz)}
+                                                                        >
+                                                                            <Clock size={15} /> Expire Link
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button 
+                                                                            className="w-full text-left px-4 py-2.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 flex items-center gap-2" 
+                                                                            onClick={() => handleRestartQuiz(quiz)}
+                                                                        >
+                                                                            <Plus size={15} /> Restart Quiz
+                                                                        </button>
+                                                                    )}
+                                                                </>
+                                                            )}
+
                                                             <button 
                                                                 className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2 disabled:opacity-50" 
                                                                 onClick={() => handleDownloadPDF(quiz)}
@@ -701,7 +785,7 @@ const MyQuizzesPage: React.FC = () => {
                                                                 <Share2 size={15} /> Share Link
                                                             </button>
                                                         )}
-                                                        <button 
+                                                         <button 
                                                             className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2 disabled:opacity-50" 
                                                             onClick={() => handleDownloadPDF(quiz)}
                                                             disabled={isGeneratingPDF === quiz.id}
@@ -710,6 +794,28 @@ const MyQuizzesPage: React.FC = () => {
                                                             Download PDF
                                                         </button>
                                                         <button className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2" onClick={() => navigate(`/quiz-rules/${quiz.id}`)}><Eye size={15} /> Preview</button>
+                                                        
+                                                        {/* Expire/Restart in Desktop Dropdown */}
+                                                        {quiz.status === 'published' && (
+                                                            <>
+                                                                {!isQuizExpired(quiz) ? (
+                                                                    <button 
+                                                                        className="w-full text-left px-4 py-2.5 text-sm font-medium text-amber-600 hover:bg-amber-50 flex items-center gap-2" 
+                                                                        onClick={() => handleExpireQuiz(quiz)}
+                                                                    >
+                                                                        <Clock size={15} /> Expire Link
+                                                                    </button>
+                                                                ) : (
+                                                                    <button 
+                                                                        className="w-full text-left px-4 py-2.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 flex items-center gap-2" 
+                                                                        onClick={() => handleRestartQuiz(quiz)}
+                                                                    >
+                                                                        <Plus size={15} /> Restart Quiz
+                                                                    </button>
+                                                                )}
+                                                            </>
+                                                        )}
+
                                                         <div className="h-px bg-slate-100 my-1"></div>
                                                         <button className="w-full text-left px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2" onClick={() => handleDeleteQuiz(quiz)}><Trash2 size={15} /> Delete Quiz</button>
                                                     </div>
@@ -846,7 +952,12 @@ const MyQuizzesPage: React.FC = () => {
             {/* Delete Confirmation Modal */}
             {isDeleteModalOpen && (quizToDelete || isBulkDelete) && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white w-full max-w-md rounded-[28px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="bg-white w-full max-w-md rounded-[28px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 relative">
+                        {/* Close button added to fix user feedback */}
+                        <button onClick={() => { setIsDeleteModalOpen(false); setIsBulkDelete(false); }} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all z-10">
+                            <X size={20} />
+                        </button>
+                        
                         <div className="p-8">
                             <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto">
                                 <Trash2 size={32} />
@@ -916,6 +1027,92 @@ const MyQuizzesPage: React.FC = () => {
                     }`}>
                         {toast.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
                         <p className="font-bold text-sm tracking-wide">{toast.message}</p>
+                    </div>
+                </div>
+            )}
+            {/* Expire Confirmation Modal */}
+            {isExpireModalOpen && quizToExpire && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-md rounded-[28px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 relative">
+                        <button onClick={() => setIsExpireModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all">
+                            <X size={20} />
+                        </button>
+                        <div className="p-8">
+                            <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                                <Clock size={32} />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-800 text-center mb-2">Expire Quiz Link?</h3>
+                            <p className="text-slate-500 text-center mb-8 leading-relaxed">
+                                This will immediately end the quiz. Students will no longer be able to start new attempts using the current link.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setIsExpireModalOpen(false)}
+                                    className="flex-1 px-6 py-4 border-2 border-slate-100 text-slate-500 font-bold rounded-2xl hover:bg-slate-50 transition-all text-sm"
+                                    disabled={isProcessingAction}
+                                >
+                                    Go Back
+                                </button>
+                                <button
+                                    onClick={confirmExpire}
+                                    disabled={isProcessingAction}
+                                    className="flex-1 px-6 py-4 bg-amber-600 text-white font-bold rounded-2xl shadow-lg shadow-amber-100 hover:bg-amber-700 transition-all flex items-center justify-center gap-2 text-sm"
+                                >
+                                    {isProcessingAction ? <Loader2 size={18} className="animate-spin" /> : 'Expire Now'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Restart Modal */}
+            {isRestartModalOpen && quizToRestart && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-md rounded-[28px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 relative">
+                        <button onClick={() => setIsRestartModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all">
+                            <X size={20} />
+                        </button>
+                        <div className="p-8">
+                            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                                <Plus size={32} />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-800 text-center mb-2">Restart Quiz</h3>
+                            <p className="text-slate-500 text-center mb-6 leading-relaxed">
+                                Set a new expiration date to re-activate the quiz link for students.
+                            </p>
+                            
+                            <div className="space-y-4 mb-8">
+                                <div>
+                                    <label className="text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest block ml-1 mb-2">
+                                        New Expiration Date & Time
+                                    </label>
+                                    <input
+                                        type="datetime-local"
+                                        value={newEndDate}
+                                        onChange={(e) => setNewEndDate(e.target.value)}
+                                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 outline-hidden focus:border-indigo-400 focus:bg-white transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setIsRestartModalOpen(false)}
+                                    className="flex-1 px-6 py-4 border-2 border-slate-100 text-slate-500 font-bold rounded-2xl hover:bg-slate-50 transition-all text-sm"
+                                    disabled={isProcessingAction}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmRestart}
+                                    disabled={isProcessingAction || !newEndDate}
+                                    className="flex-1 px-6 py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 text-sm"
+                                >
+                                    {isProcessingAction ? <Loader2 size={18} className="animate-spin" /> : 'Restart Quiz'}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

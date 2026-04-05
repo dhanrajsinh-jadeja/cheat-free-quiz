@@ -1,19 +1,30 @@
 const API_BASE_URL = 'http://localhost:5000/api';
 
+/**
+ * Utility to extract cookie value by name from document.cookie
+ */
+const getCookie = (name: string): string | undefined => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift();
+    return undefined;
+};
+
 export const apiClient = async (endpoint: string, options: RequestInit = {}): Promise<Response> => {
-    const token = localStorage.getItem('token');
-    
-    // Set up headers
+    // 🛡️ Set up headers
     const headers = new Headers(options.headers || {});
     
-    // Add Authorization header if token exists and it wasn't explicitly passed
-    if (token && !headers.has('Authorization')) {
-        headers.set('Authorization', `Bearer ${token}`);
+    // 🛡️ Double Submit Cookie Protection: Retrieve token from readable cookie
+    const xsrfToken = getCookie('XSRF-TOKEN');
+    if (xsrfToken) {
+        headers.set('X-XSRF-TOKEN', xsrfToken);
     }
     
     const config: RequestInit = {
         ...options,
         headers,
+        // 🔒 MANDATORY: Always include credentials for HttpOnly cookie support
+        credentials: 'include',
     };
     
     // Auto-prepend base URL if a relative path is provided
@@ -22,16 +33,13 @@ export const apiClient = async (endpoint: string, options: RequestInit = {}): Pr
     try {
         const response = await fetch(url, config);
         
-        // Global handler for 401 Unauthorized
+        // Global handler for 401 Unauthorized (Session Expired or Missing)
         if (response.status === 401) {
-            if (localStorage.getItem('token')) {
-                console.warn('Unauthorized access: Token is invalid or expired. Logging out.');
-                localStorage.removeItem('token');
-                
-                // Redirect user to login page
-                if (window.location.pathname !== '/login') {
-                    window.location.href = '/login';
-                }
+            console.warn('Unauthorized access: Session is invalid or expired. Redirecting to login.');
+            
+            // Redirect user to login page if they are not already there
+            if (window.location.pathname !== '/login' && !window.location.pathname.startsWith('/quiz/take')) {
+                window.location.href = '/login';
             }
         }
         

@@ -5,14 +5,19 @@ interface ProtectedRouteProps {
     children: React.ReactNode;
 }
 
+const getCookie = (name: string): string | undefined => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift();
+    return undefined;
+};
+
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     const location = useLocation();
-    const token = localStorage.getItem('token');
+    const isLoggedIn = getCookie('is_logged_in') === 'true';
 
-    if (!token) {
-        // Redirect them to the /login page, but save the current location they were
-        // trying to go to when they were redirected. This allows us to send them
-        // along to that page after they login, which is a nicer user experience.
+    if (!isLoggedIn) {
+        // Redirect them to the /login page
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 

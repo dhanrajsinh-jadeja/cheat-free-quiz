@@ -7,6 +7,7 @@ import User from '../models/userModel';
 import { OAuth2Client } from 'google-auth-library';
 import crypto from 'crypto';
 import sendEmail from '../utils/sendEmail';
+import { generateCsrfToken } from '../middleware/csrfMiddleware';
 
 
 
@@ -93,9 +94,33 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
             { expiresIn: '7d' }
         );
 
+        // Generate CSRF token for this session
+        const csrfToken = generateCsrfToken();
+
+        // 🛡️ Set Cookies
+        res.cookie('jwt', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
+        res.cookie('XSRF-TOKEN', csrfToken, {
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
+        // 💡 Non-HttpOnly hint for frontend to know user is logged in
+        res.cookie('is_logged_in', 'true', {
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
         res.status(200).json({
             message: 'Google login successful',
-            token,
+            csrfToken,
             user: {
                 id: user._id,
                 fullName: user.fullName,
@@ -183,10 +208,34 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
             { expiresIn: '7d' }
         );
 
+        // Generate CSRF Token
+        const csrfToken = generateCsrfToken();
+
+        // 🛡️ Set Cookies
+        res.cookie('jwt', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        res.cookie('XSRF-TOKEN', csrfToken, {
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        // 💡 Non-HttpOnly hint for frontend
+        res.cookie('is_logged_in', 'true', {
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
         // 6. Return response to client
         res.status(201).json({
             message: 'User registered successfully',
-            token,
+            csrfToken,
             user: {
                 id: savedUser._id,
                 fullName: savedUser.fullName,
@@ -234,9 +283,33 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             { expiresIn: '7d' }
         );
 
+        // Generate CSRF Token
+        const csrfToken = generateCsrfToken();
+
+        // 🛡️ Set Cookies
+        res.cookie('jwt', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        res.cookie('XSRF-TOKEN', csrfToken, {
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        // 💡 Non-HttpOnly hint for frontend
+        res.cookie('is_logged_in', 'true', {
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
         res.json({
             message: 'Login successful',
-            token,
+            csrfToken,
             user: {
                 id: user._id,
                 fullName: user.fullName,
@@ -366,4 +439,29 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
     } catch (error: any) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
+};
+
+/**
+ * Handle Logout
+ * Clears authentication and CSRF cookies
+ */
+export const logout = async (_req: Request, res: Response): Promise<void> => {
+    res.clearCookie('jwt');
+    res.clearCookie('XSRF-TOKEN');
+    res.clearCookie('is_logged_in');
+    res.json({ message: 'Logged out successfully' });
+};
+
+/**
+ * Endpoint to get a fresh CSRF token
+ * Used during session initialization or refresh
+ */
+export const getCsrfToken = async (_req: Request, res: Response): Promise<void> => {
+    const csrfToken = generateCsrfToken();
+    res.cookie('XSRF-TOKEN', csrfToken, {
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+    res.json({ csrfToken });
 };

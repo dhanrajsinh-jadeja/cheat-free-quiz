@@ -20,15 +20,58 @@ const PORT = process.env.PORT || 5000;
 // Define the MongoDB connection string (falls back to local db if not in .env)
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quiz-app';
 
+import { apiGlobalLimiter } from './middleware/rateLimitMiddleware';
+import { csrfProtection } from './middleware/csrfMiddleware';
+
 // --- Middleware ---
 
-// Use Helmet for security headers
+// ... (existing manual cookie parser)
+
+// Manual Cookie Parser (Avoiding extra package)
+app.use((req: any, _res, next) => {
+    const cookies: Record<string, string> = {};
+    const cookieHeader = req.headers.cookie;
+    if (cookieHeader) {
+        cookieHeader.split(';').forEach((c: string) => {
+            const [name, ...value] = c.split('=');
+            if (name) cookies[name.trim()] = value.join('=').trim();
+        });
+    }
+    req.cookies = cookies;
+    next();
+});
+
+// Use Helmet for security headers + Strict CSP
 app.use(helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" }
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: {
+        directives: {
+            "default-src": ["'self'"],
+            "script-src": ["'self'", "https://accounts.google.com"],
+            "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            "font-src": ["'self'", "https://fonts.gstatic.com"],
+            "img-src": ["'self'", "data:", "https://lh3.googleusercontent.com"],
+            "connect-src": ["'self'", "https://accounts.google.com"],
+            "frame-src": ["'self'", "https://accounts.google.com"],
+        },
+    },
 }));
 
 // Use compression for Gzip/Brotli response compression
 app.use(compression());
+
+// Global Rate Limiter for all API routes
+app.use('/api', apiGlobalLimiter);
+
+// 🛡️ Global Anti-CSRF Protection for all state-changing API routes
+app.use('/api', (req, res, next) => {
+    // Exclude initial auth and token-retrieval endpoints from CSRF check
+    const excludePaths = ['/auth/login', '/auth/signup', '/auth/google', '/auth/csrf-token'];
+    if (excludePaths.some(p => req.path.includes(p))) {
+        return next();
+    }
+    csrfProtection(req, res, next);
+});
 
 // Trust proxy is required for express-rate-limit to correctly identify IPs
 app.set('trust proxy', 1);

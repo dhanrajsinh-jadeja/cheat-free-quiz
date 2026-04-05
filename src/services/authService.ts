@@ -2,12 +2,20 @@ import { User } from '../types/user';
 import { apiClient } from './apiClient';
 
 interface AuthResponse {
-    token: string;
+    csrfToken: string;
     user: User;
     message: string;
 }
 
 export const authService = {
+    /**
+     * Fetch a fresh CSRF token from the server
+     */
+    fetchCsrfToken: async (): Promise<void> => {
+        await apiClient('/auth/csrf-token');
+        // The token is automatically set in a cookie, and apiClient will read it
+    },
+
     /**
      * Sign up a new user
      */
@@ -24,11 +32,6 @@ export const authService = {
             const error = new Error(result.message || 'Signup failed') as any;
             error.status = response.status;
             throw error;
-        }
-
-        // Store token in localStorage
-        if (result.token) {
-            localStorage.setItem('token', result.token);
         }
 
         return result;
@@ -52,10 +55,6 @@ export const authService = {
             throw error;
         }
 
-        if (result.token) {
-            localStorage.setItem('token', result.token);
-        }
-
         return result;
     },
 
@@ -75,18 +74,18 @@ export const authService = {
             throw new Error(result.message || 'Google Login failed');
         }
 
-        if (result.token) {
-            localStorage.setItem('token', result.token);
-        }
-
         return result;
     },
 
     /**
      * Logout user
      */
-    logout: () => {
-        localStorage.removeItem('token');
+    logout: async () => {
+        try {
+            await apiClient('/auth/logout', { method: 'POST' });
+        } catch (error) {
+            console.error('Logout request failed:', error);
+        }
     },
 
     /**

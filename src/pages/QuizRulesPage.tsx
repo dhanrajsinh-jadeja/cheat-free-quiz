@@ -48,9 +48,8 @@ const QuizRulesPage: React.FC = () => {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
                 <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 text-center max-w-[400px]">
-                    <AlertCircle className="text-rose-500 mx-auto mb-4" size={40} />
-                    <h2 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h2>
-                    <p className="text-slate-500 mb-8 text-sm">{error}</p>
+                    <AlertCircle className="text-rose-500 mx-auto mb-6" size={40} />
+                    <p className="text-slate-600 font-bold mb-8 text-sm">{error}</p>
                     <button 
                         onClick={() => navigate('/my-quizzes')}
                         className="w-full bg-indigo-600 hover:bg-indigo-700 transition-colors text-white py-3 rounded-xl font-semibold text-sm"
@@ -109,6 +108,60 @@ const QuizRulesPage: React.FC = () => {
         );
     }
 
+    // Check for Scheduled (Future) Quiz
+    const isFutureQuiz = quiz?.startDate && new Date() < new Date(quiz.startDate);
+    if (isFutureQuiz) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+                <div className="max-w-[420px] w-full bg-white rounded-[24px] overflow-hidden shadow-2xl border border-slate-100 animate-in zoom-in-95">
+                    <div className="bg-indigo-600 p-8 text-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+                        <div className="w-16 h-16 bg-white shadow-lg rounded-2xl flex items-center justify-center mx-auto mb-4 relative z-10">
+                            <Clock size={32} className="text-indigo-600" />
+                        </div>
+                        <h1 className="text-xl font-black text-white mb-1">Quiz Not Started</h1>
+                        <p className="text-indigo-100 text-xs font-bold uppercase tracking-widest opacity-80">{quizTitle}</p>
+                    </div>
+
+                    <div className="p-8 text-center">
+                        <div className="bg-indigo-50 rounded-2xl p-6 mb-8 border border-indigo-100">
+                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2">Opens at</p>
+                            <p className="text-indigo-900 font-black text-lg">
+                                {new Date(quiz.startDate).toLocaleString(undefined, { 
+                                    weekday: 'long',
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                })}
+                            </p>
+                        </div>
+
+                        <p className="text-slate-500 text-sm leading-relaxed mb-8">
+                            This quiz is scheduled to start in the future. Please return at the time listed above to begin your attempt.
+                        </p>
+
+                        <div className="flex flex-col gap-3">
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-100 text-sm"
+                            >
+                                Check Again
+                            </button>
+                            <button
+                                onClick={() => navigate('/my-quizzes')}
+                                className="w-full bg-white border-2 border-slate-100 hover:bg-slate-50 text-slate-500 py-3.5 rounded-xl font-bold transition-all text-sm mb-1"
+                            >
+                                Back to Dashboard
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const rules = [];
 
     if (quiz?.timeLimit) {
@@ -124,8 +177,8 @@ const QuizRulesPage: React.FC = () => {
         rules.push({
             icon: <ShieldAlert className="text-rose-600" size={18} />,
             bg: "bg-rose-50 border-rose-100",
-            title: 'Proctoring Enabled',
-            description: 'Switching tabs or minimizing the browser will trigger an automatic submission.'
+            title: 'Advanced Proctoring',
+            description: 'Tab switching or screenshots are restricted. You get ONE warning; a second violation will trigger immediate force-submission.'
         });
     }
 

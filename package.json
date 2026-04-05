@@ -9,8 +9,7 @@
     "lint": "eslint . --max-warnings 0",
     "preview": "vite preview",
     "server": "tsx server.ts",
-    "server:dev": "tsx watch server.ts",
-    "diagnose": "npx tsx diagnose_analytics.ts"
+    "server:dev": "tsx watch server.ts"
   },
   "dependencies": {
     "@iroomit/rate-limit-mongodb": "^1.0.1",

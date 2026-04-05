@@ -884,3 +884,60 @@ export const exportQuizResponses = async (req: AuthRequest, res: Response): Prom
         res.status(500).json({ message: 'Error exporting CSV', error: error.message });
     }
 };
+/**
+ * Expire a quiz (Manual force-end)
+ */
+export const expireQuiz = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const quiz = await Quiz.findById(req.params.id);
+        if (!quiz) {
+            res.status(404).json({ message: 'Quiz not found' });
+            return;
+        }
+
+        if (quiz.creator.toString() !== req.user?.id) {
+            res.status(403).json({ message: 'Not authorized to expire this quiz' });
+            return;
+        }
+
+        // Set end date to now to expire it immediately
+        quiz.endDate = new Date();
+        await quiz.save();
+
+        res.json({ message: 'Quiz expired successfully', endDate: quiz.endDate });
+    } catch (error: any) {
+        res.status(500).json({ message: 'Error expiring quiz', error: error.message });
+    }
+};
+
+/**
+ * Restart an expired quiz with a new end date
+ */
+export const restartQuiz = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const { endDate } = req.body;
+        if (!endDate) {
+            res.status(400).json({ message: 'New end date is required to restart quiz' });
+            return;
+        }
+
+        const quiz = await Quiz.findById(req.params.id);
+        if (!quiz) {
+            res.status(404).json({ message: 'Quiz not found' });
+            return;
+        }
+
+        if (quiz.creator.toString() !== req.user?.id) {
+            res.status(403).json({ message: 'Not authorized to restart this quiz' });
+            return;
+        }
+
+        quiz.endDate = new Date(endDate);
+        quiz.isPublished = true; // Ensure it is published 
+        await quiz.save();
+
+        res.json({ message: 'Quiz restarted successfully', endDate: quiz.endDate });
+    } catch (error: any) {
+        res.status(500).json({ message: 'Error restarting quiz', error: error.message });
+    }
+};

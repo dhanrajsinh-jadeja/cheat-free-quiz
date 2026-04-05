@@ -29,17 +29,23 @@ const PageLoader = () => (
     </div>
 );
 
+const getCookie = (name: string): string | undefined => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift();
+    return undefined;
+};
+
 function App() {
     useEffect(() => {
-        // On app load, proactively verify the token if one exists.
-        // If it's invalid (e.g. user was deleted), apiClient will intercept the 401 
-        // and automatically clear localStorage, forcing a redirect to /login.
+        // On app load, proactively verify the session if the hint exists.
         const verifyAuth = async () => {
-            if (localStorage.getItem('token')) {
+            const isLoggedIn = getCookie('is_logged_in') === 'true';
+            if (isLoggedIn) {
                 try {
                     await authService.getProfile();
                 } catch (error) {
-                    console.warn('Initial auth verification failed. Token might be stale.');
+                    console.warn('Initial session verification failed. Session might be stale.');
                 }
             }
         };

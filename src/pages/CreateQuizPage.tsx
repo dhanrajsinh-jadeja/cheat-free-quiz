@@ -538,7 +538,7 @@ const CreateQuizPage: React.FC = () => {
                     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                         <div className="bg-white rounded-[32px] w-full max-w-[500px] p-10 shadow-3xl relative border border-slate-100 overflow-hidden">
                             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500"></div>
-                            <button onClick={() => navigate('/my-quizzes')} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all group">
+                            <button onClick={() => setIsPublishing(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all group">
                                 <X size={20} className="group-hover:rotate-90 transition-transform duration-300" />
                             </button>
                             <div className="text-center mb-8">

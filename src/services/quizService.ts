@@ -274,6 +274,43 @@ export const quizService = {
     },
 
     /**
+     * Expire a quiz link manually
+     */
+    async expireQuiz(id: string): Promise<any> {
+        const response = await apiClient(`/quiz/${id}/expire`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || 'Failed to expire quiz');
+        }
+
+        return result;
+    },
+
+    /**
+     * Restart an expired quiz with a new end date
+     */
+    async restartQuiz(id: string, endDate: Date): Promise<any> {
+        const response = await apiClient(`/quiz/${id}/restart`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endDate }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || 'Failed to restart quiz');
+        }
+
+        return result;
+    },
+
+    /**
      * Export quiz responses as CSV
      */
     async exportQuizResponses(id: string): Promise<{ blob: Blob; filename: string }> {

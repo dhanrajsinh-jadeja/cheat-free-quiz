@@ -1,15 +1,12 @@
+import './loadEnv'; // 🛡️ LOAD BEFORE EVERYTHING ELSE
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes';
 import quizRoutes from './routes/quizRoutes';
 import errorMiddleware from './middleware/errorMiddleware';
-
-// Load environment variables from the .env file into process.env
-dotenv.config();
 
 // 🛡️ Strict Environment Variable Validation
 const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'FRONTEND_URL', 'GOOGLE_CLIENT_ID'];
@@ -75,7 +72,7 @@ app.use('/api', apiGlobalLimiter);
 // 🛡️ Global Anti-CSRF Protection for all state-changing API routes
 app.use('/api', (req, res, next) => {
     // Exclude initial auth and token-retrieval endpoints from CSRF check
-    const excludePaths = ['/auth/login', '/auth/signup', '/auth/google', '/auth/csrf-token'];
+    const excludePaths = ['/auth/login', '/auth/signup', '/auth/google', '/auth/csrf-token', '/auth/forgot-password', '/auth/reset-password'];
     if (excludePaths.some(p => req.path.includes(p))) {
         return next();
     }

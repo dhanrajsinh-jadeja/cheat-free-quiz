@@ -12,5 +12,14 @@ export default defineConfig({
     build: {
         outDir: 'dist', // Standard output for Vercel
     },
+    server: {
+        proxy: {
+            '/api': {
+                target: 'http://localhost:5000',
+                changeOrigin: true,
+                secure: false,
+            }
+        }
+    },
     logLevel: 'info',
 })

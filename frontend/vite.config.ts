@@ -9,6 +9,15 @@ export default defineConfig({
         react(),
         tailwindcss(),
     ],
+    server: {
+        proxy: {
+            '/api': {
+                target: 'http://localhost:5000',
+                changeOrigin: true,
+                secure: false,
+            },
+        },
+    },
     build: {
         outDir: 'dist', // Standard output for Vercel
     },

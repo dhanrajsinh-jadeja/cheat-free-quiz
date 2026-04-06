@@ -1,3 +1,3 @@
-export * from './userModel';
-export * from './quizModel';
-export * from './attemptModel';
+export * from './userModel.js';
+export * from './quizModel.js';
+export * from './attemptModel.js';

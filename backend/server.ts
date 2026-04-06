@@ -1,12 +1,12 @@
-import './loadEnv'; // 🛡️ LOAD BEFORE EVERYTHING ELSE
+import './loadEnv.js'; // 🛡️ LOAD BEFORE EVERYTHING ELSE
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import authRoutes from './routes/authRoutes';
-import quizRoutes from './routes/quizRoutes';
-import errorMiddleware from './middleware/errorMiddleware';
+import authRoutes from './routes/authRoutes.js';
+import quizRoutes from './routes/quizRoutes.js';
+import errorMiddleware from './middleware/errorMiddleware.js';
 
 // 🛡️ Strict Environment Variable Validation
 const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'FRONTEND_URL', 'EMAIL_USER', 'EMAIL_PASS'];
@@ -14,10 +14,17 @@ const missingEnvVars = requiredEnvVars.filter(v => !process.env[v]);
 
 if (missingEnvVars.length > 0) {
     console.error(`❌ CRITICAL ERROR: Missing environment variables: ${missingEnvVars.join(', ')}`);
-    console.error('Please ensure these are set in your .env file or Vercel dashboard.');
+    // During local development, we want to see the error but not necessarily crash immediately
+    // In production/Vercel, we crash to prevent running in an insecure/broken state
     if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+        console.error('Fatal: Missing production environment variables. Exiting.');
         process.exit(1);
     }
+}
+
+// 🛡️ Normalize FRONTEND_URL: Remove trailing slash if present to avoid CORS issues
+if (process.env.FRONTEND_URL && process.env.FRONTEND_URL.endsWith('/')) {
+    process.env.FRONTEND_URL = process.env.FRONTEND_URL.slice(0, -1);
 }
 
 // Initialize the Express application
@@ -26,8 +33,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI!;
 
-import { apiGlobalLimiter } from './middleware/rateLimitMiddleware';
-import { csrfProtection } from './middleware/csrfMiddleware';
+import { apiGlobalLimiter } from './middleware/rateLimitMiddleware.js';
+import { csrfProtection } from './middleware/csrfMiddleware.js';
 
 // --- Middleware ---
 

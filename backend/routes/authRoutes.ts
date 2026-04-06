@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { signUp, login, googleLogin, forgotPassword, resetPassword, getProfile, logout, getCsrfToken } from '../controller/authController';
-import { authMiddleware } from '../middleware/authMiddleware';
+import { signUp, login, googleLogin, forgotPassword, resetPassword, getProfile, logout, getCsrfToken } from '../controller/authController.js';
+import { authMiddleware } from '../middleware/authMiddleware.js';
 import { 
     forgotPwdEmailBlockCheck, forgotPasswordLimiter, 
     signInIPBlockCheck, signInLimiter, 
     signUpIPBlockCheck, signUpEmailLimiter, signUpLimiter 
-} from '../middleware/rateLimitMiddleware';
+} from '../middleware/rateLimitMiddleware.js';
 
 const router = Router();
 

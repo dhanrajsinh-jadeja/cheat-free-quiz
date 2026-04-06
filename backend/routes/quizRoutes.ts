@@ -4,9 +4,9 @@ import {
     deleteQuizzesBatch, getAttemptStatus, updateQuiz, submitQuiz, 
     getQuizAnalytics, getAttemptDetails, exportQuizResponses,
     expireQuiz, restartQuiz
-} from '../controller/quizController';
-import { authMiddleware } from '../middleware/authMiddleware';
-import { quizActionLimiter } from '../middleware/rateLimitMiddleware';
+} from '../controller/quizController.js';
+import { authMiddleware } from '../middleware/authMiddleware.js';
+import { quizActionLimiter } from '../middleware/rateLimitMiddleware.js';
 
 const router = express.Router();
 

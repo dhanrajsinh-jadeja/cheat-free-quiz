@@ -1,9 +1,9 @@
 import { Response } from 'express';
 import { Types } from 'mongoose';
-import Quiz from '../models/quizModel';
-import Attempt from '../models/attemptModel';
-import '../models/userModel'; // Ensures user model is registered for mongoose.populate('user')
-import { AuthRequest } from '../middleware/authMiddleware';
+import Quiz from '../models/quizModel.js';
+import Attempt from '../models/attemptModel.js';
+import '../models/userModel.js'; // Ensures user model is registered for mongoose.populate('user')
+import { AuthRequest } from '../middleware/authMiddleware.js';
 
 /**
  * Create a new quiz
